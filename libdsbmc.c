@@ -307,6 +307,7 @@ dsbmc_connect()
 {
 	char *e;
 
+	cmdqsz = ndevs = 0;
 	event_queue.n = event_queue.i = 0;
 
 	if ((dsbmdfp = uconnect(PATH_DSBMD_SOCKET)) == NULL) {
