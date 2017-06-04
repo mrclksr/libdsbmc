@@ -38,6 +38,7 @@
 #include <sys/select.h>
 #include "libdsbmc.h"
 
+#define CMDQMAXSZ	  32
 #define PATH_DSBMD_SOCKET "/var/run/dsbmd.socket"
 #define ERR_SYS_FATAL	  (DSBMC_ERR_SYS|DSBMC_ERR_FATAL)
 
@@ -51,7 +52,8 @@ static struct dsbmc_sender_s {
 	int retcode;
 	const dsbmc_dev_t *dev;
 	void (*callback)(int retcode, const dsbmc_dev_t *dev);
-} dsbmc_sender;
+	char *cmd;
+} dsbmc_sender[CMDQMAXSZ];
 
 static struct event_queue_s {
 	int  n;			/* # of events in queue */
@@ -147,6 +149,7 @@ static const struct disktypetbl_s {
 };
 #define NDSKTYPES (sizeof(disktypetbl) / sizeof(struct disktypetbl_s))
 
+static int	   send_string(const char *str);
 static int	   push_event(const char *e);
 static int	   parse_event(const char *str);
 static int	   process_event(char *buf);
@@ -163,7 +166,7 @@ static char	   *pull_event(void);
 static dsbmc_dev_t *add_device(const dsbmc_dev_t *d);
 static dsbmc_dev_t *lookup_device(const char *dev);
 
-static int  _error, ndevs;
+static int  _error, ndevs, cmdqsz;
 static FILE *dsbmdfp;
 static char errormsg[_POSIX2_LINE_MAX];
 #define MAXDEVS	64
@@ -283,13 +286,12 @@ dsbmc_fetch_event(dsbmc_event_t *ev)
 	while ((e = read_event(false)) != NULL) {
 		if (push_event(e) == -1)
 			ERROR(-1, 0, true, "push_event()");
+		puts(e);
 	}
 	if (dsbmc_get_err(NULL) != 0)
 		ERROR(-1, 0, true, "read_event()");
 	if ((e = pull_event()) == NULL)
 		return (0);
-	fprintf(stderr, "pulled string: %s\n", e);
-
 	if ((error = process_event(e)) == 1) {
 		fprintf(stderr, "event type == %c\n", dsbmdevent.type);
 		ev->type = dsbmdevent.type;
@@ -563,7 +565,6 @@ read_event(bool block)
 static int
 push_event(const char *e)
 {
-
 	if (event_queue.n >= MAXEQSZ)
 		ERROR(-1, ERR_SYS_FATAL, false, "MAXEQSZ exceeded.");
 	if ((event_queue.ln[event_queue.n] = strdup(e)) == NULL)
@@ -664,6 +665,7 @@ parse_event(const char *str)
 static int
 process_event(char *buf)
 {
+	int	     i;
 	dsbmc_dev_t *d;
 
 	if (parse_event(buf) != 0)
@@ -671,11 +673,19 @@ process_event(char *buf)
 	switch (dsbmdevent.type) {
 	case DSBMC_EVENT_SUCCESS_MSG:
 	case DSBMC_EVENT_ERROR_MSG:
-		if (dsbmc_sender.callback != NULL) {
-			dsbmc_sender.callback(dsbmdevent.code,
-			    dsbmc_sender.dev);
-			dsbmc_sender.callback = NULL;
+		if (cmdqsz <= 0)
+			return (0);
+		dsbmc_sender[0].callback(dsbmdevent.code, dsbmc_sender[0].dev);
+		free(dsbmc_sender[0].cmd);
+		for (i = 0; i < cmdqsz - 1; i++) {
+			dsbmc_sender[i].dev = dsbmc_sender[i + 1].dev;
+			dsbmc_sender[i].callback = dsbmc_sender[i + 1].callback;
+			dsbmc_sender[i].cmd = dsbmc_sender[i + 1].cmd;
 		}
+		if (--cmdqsz == 0)
+			return (0);
+		if (send_string(dsbmc_sender[i].cmd) == -1)
+			ERROR(-1, 0, true, "send_string()");
 		return (0);
 	case DSBMC_EVENT_ADD_DEVICE:
 		if ((d = add_device(&dsbmdevent.devinfo)) == NULL) {
@@ -731,19 +741,19 @@ dsbmc_send_async(const dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
 
 	dsbmc_clearerr();
 
+	if (cmdqsz >= CMDQMAXSZ)
+		ERROR(-1, DSBMC_ERR_CMDQ_BUSY, false, "Command queue busy");
 	va_start(ap, cmd);
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
 
-	if (fputs(buf, dsbmdfp) != EOF) {
-		dsbmc_sender.dev = dev;
-		dsbmc_sender.callback = cb;
-	} else if (feof(dsbmdfp)) {
-		ERROR(-1, DSBMC_ERR_LOST_CONNECTION, false,
-		    "Lost connection to DSBMD.");
-	} else
-		ERROR(-1, ERR_SYS_FATAL, false, "fprintf()");
-	(void)fflush(dsbmdfp);
-
+	dsbmc_sender[cmdqsz].dev = dev;
+	dsbmc_sender[cmdqsz].callback = cb;
+	if ((dsbmc_sender[cmdqsz].cmd = strdup(buf)) == NULL)
+		ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
+	if (cmdqsz++ > 0)
+		return (0);
+	if (send_string(buf) == -1)
+		ERROR(-1, 0, true, "send_string()");
 	return (0);
 }
 
@@ -757,15 +767,8 @@ dsbmc_send(const char *cmd, ...)
 	va_start(ap, cmd);
 	
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
-	if (fputs(buf, dsbmdfp) == EOF) {
-		if (feof(dsbmdfp)) {
-			ERROR(-1, DSBMC_ERR_LOST_CONNECTION, false,
-			    "Lost connection to DSBMD.");
-		} else
-			ERROR(-1, ERR_SYS_FATAL, false, "fprintf()");
-	}
-	(void)fflush(dsbmdfp);
-
+	if (send_string(buf) == -1)
+		ERROR(-1, 0, true, "send_string()");
 	while ((e = read_event(true)) != NULL) {
 		if (parse_event(e) == -1)
 			ERROR(-1, 0, true, "parse_event()");
@@ -779,4 +782,25 @@ dsbmc_send(const char *cmd, ...)
 	ERROR(-1, 0, true, "read_event()");
 }
 
+static int
+send_string(const char *str)
+{
+	fd_set wrset;
+
+	FD_ZERO(&wrset); FD_SET(fileno(dsbmdfp), &wrset);
+	while (select(fileno(dsbmdfp) + 1, 0, &wrset, 0, 0) == -1) {
+		if (errno != EINTR)
+			ERROR(-1, ERR_SYS_FATAL, false, "select()");
+	}
+	if (fputs(str, dsbmdfp) == EOF) {
+		if (feof(dsbmdfp)) {
+			ERROR(-1, DSBMC_ERR_LOST_CONNECTION, false,
+			    "Lost connection to DSBMD.");
+		} else
+			ERROR(-1, ERR_SYS_FATAL, false, "fputs()");
+	} else
+		(void)fflush(dsbmdfp);
+
+	return (0);
+}
 

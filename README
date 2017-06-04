@@ -78,8 +78,8 @@ The _async() variant of  dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(), and
 dsbmc_set_speed() return 0, and the given callback function will be executed
 by dsbmd_fetch_event() as soon as command-reply code is received. If an
 error occured, -1 is returned. The error code can be retrieved by calling
-dsbmd_get_err(). Possible error codes are DSBMC_ERR_LOST_CONNECTION or a
-system error.
+dsbmd_get_err(). Possible error codes are DSBMC_ERR_LOST_CONNECTION,
+DSBMC_ERR_CMDQ_BUSY or a system error.
 
 If the DSBMC_EVENT_DEL_DEVICE event was received, the device object should
 be removed from the list using dsbmc_free_dev() if it is no longer needed.
@@ -152,6 +152,9 @@ DSBMC_ERR_LOST_CONNECTION
 
 DSBMC_ERR_INVALID_DEVICE
 	A NULL pointer or a pointer to a removed device object was passed.
+
+DSBMC_ERR_CMDQ_BUSY
+	The max. number of commands to be send asynchronously was exceeded.
 
 Possible error codes of dsbmd events are:
 
