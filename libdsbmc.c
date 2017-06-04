@@ -355,13 +355,18 @@ set_error(int error, bool prepend, const char *fmt, ...)
 	if (prepend) {
 		_error |= error;
 		if (error & DSBMC_ERR_FATAL) {
-			if (strncmp(errormsg, "Fatal: ", 7) == 0) {
-				memmove(errormsg, errormsg + 7,
-				    strlen(errormsg) - 6);
+			if (strncmp(errormsg, "Fatal error: ", 13) == 0) {
+				memmove(errormsg, errormsg + 13,
+				    strlen(errormsg) - 12);
 			}
-			(void)strncpy(errbuf, "Fatal: ", sizeof(errbuf) - 1);
+			(void)strncpy(errbuf, "Fatal error: ",
+			    sizeof(errbuf) - 1);
 			len = strlen(errbuf);
-		} else
+		} else if (strncmp(errormsg, "Error: ", 7) == 0) {
+			memmove(errormsg, errormsg + 7, strlen(errormsg) - 6);
+			(void)strncpy(errbuf, "Error: ", sizeof(errbuf) - 1);
+			len = strlen(errbuf);
+ 		} else
 			len = 0;
 		(void)vsnprintf(errbuf + len, sizeof(errbuf) - len, fmt, ap);
 
@@ -373,11 +378,13 @@ set_error(int error, bool prepend, const char *fmt, ...)
 		_error = error;
 		(void)vsnprintf(errormsg, sizeof(errormsg), fmt, ap);
 		if (error == DSBMC_ERR_FATAL) {
-			(void)snprintf(errbuf, sizeof(errbuf), "Fatal: %s",
-			    errormsg);
-			(void)strcpy(errormsg, errbuf);
-		}
-		
+			(void)snprintf(errbuf, sizeof(errbuf),
+			    "Fatal error: %s", errormsg);
+		} else {
+			(void)snprintf(errbuf, sizeof(errbuf),
+			    "Error: %s", errormsg);
+		}	
+		(void)strcpy(errormsg, errbuf);
 	}
 	if ((error & DSBMC_ERR_SYS) && _errno != 0) {
 		len = strlen(errormsg);
@@ -764,6 +771,11 @@ dsbmc_send(const char *cmd, ...)
 	va_list	ap;
 
 	dsbmc_clearerr();
+
+	if (cmdqsz > 0) {
+		ERROR(-1, DSBMC_ERR_COMMAND_IN_PROGRESS, false,
+		    "dsbmc_send(): Command already in progress");
+	}
 	va_start(ap, cmd);
 	
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);

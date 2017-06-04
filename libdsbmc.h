@@ -37,6 +37,7 @@ extern "C" {
 #define DSBMC_ERR_LOST_CONNECTION	(1 << 2)
 #define DSBMC_ERR_INVALID_DEVICE	(1 << 3)
 #define DSBMC_ERR_CMDQ_BUSY		(1 << 4)
+#define DSBMC_ERR_COMMAND_IN_PROGRESS	(1 << 5)
 
 #define DSBMC_ERR_ALREADY_MOUNTED	((1 << 8) + 0x01)
 #define DSBMC_ERR_PERMISSION_DENIED	((1 << 8) + 0x02)
