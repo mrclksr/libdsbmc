@@ -1,0 +1,172 @@
+NAME
+
+libdsbmc – Library for writing clients for DSBMD.
+
+
+SYNOPSIS
+
+#include <libdsbmc.h>
+
+int  dsbmc_fetch_event(dsbmc_event_t *ev);
+int  dsbmc_get_devlist(const dsbmc_dev_t ***list);
+int  dsbmc_mount(const dsbmc_dev_t *dev);
+int  dsbmc_unmount(const dsbmc_dev_t *dev);
+int  dsbmc_eject(const dsbmc_dev_t *dev);
+int  dsbmc_set_speed(const dsbmc_dev_t *dev, int speed);
+int  dsbmc_mount_async(const dsbmc_dev_t *dev,
+		void (*cb)(int, const dsbmc_dev_t *dev));
+int  dsbmc_unmount_async(const dsbmc_dev_t *dev,
+		void (*cb)(int, const dsbmc_dev_t *dev));
+int  dsbmc_eject_async(const dsbmc_dev_t *dev,
+		void (*cb)(int, const dsbmc_dev_t *dev));
+int  dsbmc_connect(void);
+int  dsbmc_get_fd(void);
+int  dsbmc_get_err(const char **errstr);
+void dsbmc_disconnect(void);
+void dsbmc_free_dev(dsbmc_dev_t *dev);
+const char *dsbmc_errstr(void);
+
+
+DESCRIPTION
+
+The dsbmc_connect() function must be called before any other dsbmc function.
+It establishes a connection to DSBMD, and returns 0 on success, and -1 if
+an error occured.
+
+The dsbmc_disconnect() function terminates the connection to DSBMD.
+
+The dsbmc_fetch_event() function fetches the next available event, updates
+internal data structures, and executes callback functions. If no event is
+available dsbmc_fetch_event() returns 0. If an error occured, it returns -1
+else a value > 0 is returned. Instead of CPU intensive polling,
+dsbmc_fetch_event can be used together with select() by passing the file
+descriptor retrieved by dsbmd_get_fd().
+
+The dsbmc_get_devlist() fucntion sets the given pointer to the internal list
+of dsbmc_dev_t * objects. The number of objects is returned.
+
+The dsbmc_get_fd() function returns the file descriptor of the socket which
+is connected to DSBMD. Its ONLY purpose is to use it with select().
+
+The dsbmc_mount() function mounts the device the given object represents.
+The function blocks until a reply from DSBMD is received or an error occured.
+On success dsbmc_mount() returns 0. If mounting failed, an error code > 0
+is returned, and -1 on error. Possible error code are:
+DSBMC_ERR_ALREADY_MOUNTED, DSBMC_ERR_PERMISSION_DENIED, DSBMC_ERR_DEVICE_BUSY,
+DSBMC_ERR_NO_SUCH_DEVICE, DSBMC_ERR_NO_MEDIA, DSBMC_ERR_UNKNOWN_FILESYSTEM,
+DSBMC_ERR_UNKNOWN_ERROR, DSBMC_ERR_MNTCMD_FAILED, or an errno number.
+
+The dsbmc_unmount() function unmounts the device the given object represents.
+The function blocks until a reply from DSBMD is received or an error occured.
+On success dsbmc_unmount() returns 0. If unmounting failed, an error code > 0
+is returned, and -1 on error. Possible error code are: DSBMC_ERR_NOT_MOUNTED,
+DSBMC_ERR_DEVICE_BUSY, or an errno number.
+
+The dsbmc_eject() function ejects the device the given object represents.
+The function blocks until a reply from DSBMD is received or an error occured.
+On success dsbmc_eject() returns 0. If ejecting failed, an error code > 0
+is returned, and -1 on error. Possible error code are: DSBMC_ERR_NOT_EJECTABLE,
+DSBMC_ERR_DEVICE_BUSY, or an errno number.
+
+The dsbmc_set_speed() function sets speed of the device the given object
+represents. The function blocks until a reply from DSBMD is received or an
+error occured. On success dsbmc_set_speed() returns 0. If it failed, an error
+code > 0 is returned, and -1 on error. Possible error code are:
+ERR_INVALID_ARGUMENT, or an errno number.
+
+The _async() variant of  dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(), and
+dsbmc_set_speed() return 0, and the given callback function will be executed
+by dsbmd_fetch_event() as soon as command-reply code is received. If an
+error occured, -1 is returned. The error code can be retrieved by calling
+dsbmd_get_err(). Possible error codes are DSBMC_ERR_LOST_CONNECTION or a
+system error.
+
+If the DSBMC_EVENT_DEL_DEVICE event was received, the device object should
+be removed from the list using dsbmc_free_dev() if it is no longer needed.
+
+If one of the functions failed with an error, the function dsbmc_get_err()
+can be used to retrieve the error code, and if errstr is not NULL, an error
+message.
+
+The function dsbmc_errstr() returns the last error message.
+
+
+OBJECTS
+
+Device object definition:
+
+typedef struct dsbmc_dev_s {
+	u_int	 cmds;			/* Supported commands. */
+#define DSBMC_CMD_MOUNT			(1 << 0x00)
+#define DSBMC_CMD_UNMOUNT		(1 << 0x01)
+#define DSBMC_CMD_EJECT			(1 << 0x02)
+#define DSBMC_CMD_PLAY			(1 << 0x03)
+#define DSBMC_CMD_OPEN			(1 << 0x04)
+#define DSBMC_CMD_SPEED			(1 << 0x05)
+	char	 type;
+#define DSBMC_DT_HDD			0x01
+#define DSBMC_DT_USBDISK		0x02
+#define DSBMC_DT_DATACD			0x03
+#define	DSBMC_DT_AUDIOCD		0x04
+#define	DSBMC_DT_RAWCD			0x05
+#define	DSBMC_DT_DVD			0x06
+#define	DSBMC_DT_VCD			0x07
+#define	DSBMC_DT_SVCD			0x08
+#define	DSBMC_DT_FLOPPY			0x09
+#define DSBMC_DT_MMC			0x0a
+#define DSBMC_DT_MTP			0x0b
+#define DSBMC_DT_PTP			0x0c
+	int	 speed
+	char	 *dev;			/* Device name */
+	char	 *volid;		/* Volume ID */
+	char	 *mntpt;		/* Mount point */
+	char	 *fsname;		/* Filesystem name */
+	bool	 mounted;		/* Whether drive is mounted. */
+	bool	 removed;
+	uint64_t mediasize;		/* For "size" command. */
+	uint64_t free;			/* 	 ""	       */
+	uint64_t used;			/* 	 ""	       */
+} dsbmc_dev_t;
+
+Event object definition:
+
+typedef struct dsbmc_event_s {
+	int type;			/* Event type */
+	int code;			/* Error code */
+	dsbmc_dev_t *dev;		/* Pointer into dev list */
+} dsbmc_event_t;
+
+
+ERROR CODES
+
+dsbmc_get_err() return the following error codes as bitmask:
+
+DSBMC_ERR_SYS
+	Syscall failed
+
+DSBMC_ERR_FATAL
+	Fatal error. Continuing the program is probably not possible.
+
+DSBMC_ERR_LOST_CONNECTION
+	Connection to DSBMD lost.
+
+DSBMC_ERR_INVALID_DEVICE
+	A NULL pointer or a pointer to a removed device object was passed.
+
+Possible error codes of dsbmd events are:
+
+DSBMC_ERR_ALREADY_MOUNTED
+DSBMC_ERR_PERMISSION_DENIED
+DSBMC_ERR_NOT_MOUNTED
+DSBMC_ERR_DEVICE_BUSY
+DSBMC_ERR_NO_SUCH_DEVICE
+DSBMC_ERR_MAX_CONN_REACHED
+DSBMC_ERR_NOT_EJECTABLE
+DSBMC_ERR_UNKNOWN_COMMAND
+DSBMC_ERR_UNKNOWN_OPTION
+DSBMC_ERR_SYNTAX_ERROR
+DSBMC_ERR_NO_MEDIA
+DSBMC_ERR_UNKNOWN_FILESYSTEM
+DSBMC_ERR_UNKNOWN_ERROR
+DSBMC_ERR_MNTCMD_FAILED
+
