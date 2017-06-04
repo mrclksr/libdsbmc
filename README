@@ -156,6 +156,10 @@ DSBMC_ERR_INVALID_DEVICE
 DSBMC_ERR_CMDQ_BUSY
 	The max. number of commands to be send asynchronously was exceeded.
 
+DSBMC_ERR_COMMAND_IN_PROGRESS
+	An attempt was made to send a command while there are still commands
+	in the command queue.
+
 Possible error codes of dsbmd events are:
 
 DSBMC_ERR_ALREADY_MOUNTED
