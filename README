@@ -36,11 +36,12 @@ an error occured.
 The dsbmc_disconnect() function terminates the connection to DSBMD.
 
 The dsbmc_fetch_event() function fetches the next available event, updates
-internal data structures, and executes callback functions. If no event is
-available dsbmc_fetch_event() returns 0. If an error occured, it returns -1
-else a value > 0 is returned. Instead of CPU intensive polling,
-dsbmc_fetch_event can be used together with select() by passing the file
-descriptor retrieved by dsbmd_get_fd().
+internal data structures, and executes callback functions. If an event is
+available, dsbmc_fetch_event() returns a value > 0, else 0 is returned.
+If an error occured, dsbmc_fetch_event() returns -1. Possible errors
+are DSBMC_ERR_LOST_CONNECTION, DSBMC_ERR_SYS and/or DSBMC_ERR_FATAL.
+Instead of CPU intensive polling, dsbmc_fetch_event can be used together
+with select() by passing the file descriptor retrieved by dsbmd_get_fd().
 
 The dsbmc_get_devlist() fucntion sets the given pointer to the internal list
 of dsbmc_dev_t * objects. The number of objects is returned.
