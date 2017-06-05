@@ -49,10 +49,10 @@
 	} while (0)
 
 static struct dsbmc_sender_s {
-	int retcode;
+	int  retcode;
+	char *cmd;
 	const dsbmc_dev_t *dev;
 	void (*callback)(int retcode, const dsbmc_dev_t *dev);
-	char *cmd;
 } dsbmc_sender[CMDQMAXSZ];
 
 static struct event_queue_s {
@@ -149,6 +149,7 @@ static const struct disktypetbl_s {
 };
 #define NDSKTYPES (sizeof(disktypetbl) / sizeof(struct disktypetbl_s))
 
+static int	   uconnect(const char *path);
 static int	   send_string(const char *str);
 static int	   push_event(const char *e);
 static int	   parse_event(const char *str);
@@ -160,14 +161,13 @@ static void	   dsbmc_clearerr();
 static void	   set_error(int error, bool prepend, const char *fmt, ...);
 static void	   del_device(const char *);
 static void	   cleanup(void);
-static FILE	   *uconnect(const char *path);
+static char	   *readln(void);
 static char	   *read_event(bool block);
 static char	   *pull_event(void);
 static dsbmc_dev_t *add_device(const dsbmc_dev_t *d);
 static dsbmc_dev_t *lookup_device(const char *dev);
 
-static int  _error, ndevs, cmdqsz;
-static FILE *dsbmdfp;
+static int  dsbmd, _error, ndevs, cmdqsz;
 static char errormsg[_POSIX2_LINE_MAX];
 #define MAXDEVS	64
 dsbmc_dev_t *devs[MAXDEVS];
@@ -267,7 +267,7 @@ dsbmc_get_err(const char **errmsg)
 int
 dsbmc_get_fd()
 {
-	return (fileno(dsbmdfp));
+	return (dsbmd);
 }
 
 const char *
@@ -293,7 +293,6 @@ dsbmc_fetch_event(dsbmc_event_t *ev)
 	if ((e = pull_event()) == NULL)
 		return (0);
 	if ((error = process_event(e)) == 1) {
-		fprintf(stderr, "event type == %c\n", dsbmdevent.type);
 		ev->type = dsbmdevent.type;
 		ev->code = dsbmdevent.code;
 		if (dsbmdevent.devinfo.dev != NULL)
@@ -310,7 +309,7 @@ dsbmc_connect()
 	cmdqsz = ndevs = 0;
 	event_queue.n = event_queue.i = 0;
 
-	if ((dsbmdfp = uconnect(PATH_DSBMD_SOCKET)) == NULL) {
+	if ((dsbmd = uconnect(PATH_DSBMD_SOCKET)) == -1) {
 		ERROR(-1, ERR_SYS_FATAL, false, "uconnect(%s)",
 		    PATH_DSBMD_SOCKET);
 	}
@@ -395,7 +394,7 @@ set_error(int error, bool prepend, const char *fmt, ...)
 	}
 }
 
-static FILE *
+static int
 uconnect(const char *path)
 {
 	int  s;
@@ -403,19 +402,15 @@ uconnect(const char *path)
 	struct sockaddr_un saddr;
 
 	if ((s = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1)
-		ERROR(NULL, ERR_SYS_FATAL, false, "socket()");
+		ERROR(-1, ERR_SYS_FATAL, false, "socket()");
 	(void)memset(&saddr, (unsigned char)0, sizeof(saddr));
 	(void)snprintf(saddr.sun_path, sizeof(saddr.sun_path), "%s", path);
 	saddr.sun_family = AF_LOCAL;
 	if (connect(s, (struct sockaddr *)&saddr, sizeof(saddr)) == -1)
-		ERROR(NULL, ERR_SYS_FATAL, false, "connect(%s)", path);
-	if ((sp = fdopen(s, "r+")) == NULL)
-		ERROR(NULL, ERR_SYS_FATAL, false, "fdopen()");
-	/* Make the stream line buffered, and the socket non-blocking. */
-	if (setvbuf(sp, NULL, _IOLBF, 0) == -1 ||
-	    fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK) == -1)
-		ERROR(NULL, ERR_SYS_FATAL, false, "setvbuf()/fcntl()");
-	return (sp);
+		ERROR(-1, ERR_SYS_FATAL, false, "connect(%s)", path);
+	if (fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK) == -1)
+		ERROR(-1, ERR_SYS_FATAL, false, "setvbuf()/fcntl()");
+	return (s);
 }
 
 static void
@@ -425,7 +420,7 @@ cleanup()
 		del_device(devs[0]->dev);
 	while (pull_event() != NULL)
 		;
-	(void)fclose(dsbmdfp);
+	(void)close(dsbmd);
 }
 
 
@@ -529,45 +524,83 @@ lookup_device(const char *dev)
 	return (NULL);
 }
 
+char *
+readln()
+{
+	int  i, n;
+	static char *p, *lnbuf = NULL;
+	static int rd = 0, bufsz = 0, slen = 0;
+
+	if (lnbuf == NULL) {
+		if ((lnbuf = malloc(_POSIX2_LINE_MAX)) == NULL)
+			return (NULL);
+		bufsz = _POSIX2_LINE_MAX;
+	}
+	n = 0;
+	do {
+		rd += n;
+		if (slen > 0)
+			(void)memmove(lnbuf, lnbuf + slen, rd - slen);
+		rd  -= slen;
+		slen = 0;
+		for (i = 0; i < rd && lnbuf[i] != '\n'; i++)
+			;
+		if (i < rd && lnbuf[i] == '\n') {
+			lnbuf[i] = '\0';
+			slen = i + 1;
+			if (slen >= bufsz)
+				slen = rd = 0;
+			return (lnbuf);
+		}
+		if (rd >= bufsz) {
+			p = realloc(lnbuf, bufsz + _POSIX2_LINE_MAX);
+			if (p == NULL)
+				return (NULL);
+			lnbuf  = p;
+			bufsz += _POSIX2_LINE_MAX;
+		}
+	} while ((n = read(dsbmd, lnbuf + rd, bufsz - rd)) > 0);
+
+	if (rd > 0) {
+		lnbuf[rd] = '\0';
+		slen = rd = 0;
+		return (lnbuf);
+	} else if (n == 0) {
+		ERROR(NULL, DSBMC_ERR_LOST_CONNECTION, false,
+		    "Lost connection to DSBMD");
+	} else if (n == -1) {
+		if (errno != EINTR && errno != EAGAIN)
+			ERROR(NULL, ERR_SYS_FATAL, false, "read()");
+	}
+	slen = rd = 0;
+
+	return (NULL);
+}
+
+
 static char *
 read_event(bool block)
 {
 	int	    fd;
-	char	    *p;
+	char	    *p, *ln;
 	fd_set	    rset;
-	static char buf[_POSIX2_LINE_MAX];
 
-	if (feof(dsbmdfp)) {
-		ERROR(NULL, DSBMC_ERR_LOST_CONNECTION, false,
-		    "Lost connection to DSBMD");
-	}
-	fd = fileno(dsbmdfp);
-	if (fgets(buf, sizeof(buf), dsbmdfp) == NULL) {
-		if (feof(dsbmdfp)) {
-			/* Lost connection. */
-			ERROR(NULL, DSBMC_ERR_LOST_CONNECTION, false,
-			    "Lost connection to DSBMD");
-		} else if (!block)
+	if ((ln = readln()) == NULL) {
+		if (_error &  DSBMC_ERR_LOST_CONNECTION)
+			return (NULL);
+		else if (!block)
 			return (NULL);
 	} else
-		return (buf);
-	FD_ZERO(&rset); FD_SET(fd, &rset);
+		return (ln);
+	FD_ZERO(&rset); FD_SET(dsbmd, &rset);
 	/* Block until data is available. */
-	while (select(fd + 1, &rset, NULL, NULL, NULL) == -1) {
+	while (select(dsbmd + 1, &rset, NULL, NULL, NULL) == -1) {
 		if (errno != EINTR)
 			return (NULL);
 		else
 			ERROR(NULL, ERR_SYS_FATAL, false, "select()");
 	}
-	if ((p = fgets(buf, sizeof(buf), dsbmdfp)) == NULL) {
-		if (feof(dsbmdfp)) {
-			/* Lost connection. */
-			ERROR(NULL, DSBMC_ERR_LOST_CONNECTION, false,
-			    "Lost connection to DSBMD");
-		} else
-			ERROR(NULL, ERR_SYS_FATAL, false, "fgets()");
-	}
-	return (p);
+	return (readln());
 }
 
 static int
@@ -800,20 +833,15 @@ send_string(const char *str)
 {
 	fd_set wrset;
 
-	FD_ZERO(&wrset); FD_SET(fileno(dsbmdfp), &wrset);
-	while (select(fileno(dsbmdfp) + 1, 0, &wrset, 0, 0) == -1) {
+	FD_ZERO(&wrset); FD_SET(dsbmd, &wrset);
+	while (select(dsbmd + 1, 0, &wrset, 0, 0) == -1) {
 		if (errno != EINTR)
 			ERROR(-1, ERR_SYS_FATAL, false, "select()");
 	}
-	if (fputs(str, dsbmdfp) == EOF) {
-		if (feof(dsbmdfp)) {
-			ERROR(-1, DSBMC_ERR_LOST_CONNECTION, false,
-			    "Lost connection to DSBMD.");
-		} else
-			ERROR(-1, ERR_SYS_FATAL, false, "fputs()");
-	} else
-		(void)fflush(dsbmdfp);
-
+	while (write(dsbmd, str, strlen(str)) == -1) {
+		if (errno != EINTR)
+			ERROR(-1, ERR_SYS_FATAL, false, "write()");
+	}		
 	return (0);
 }
 
