@@ -1,6 +1,6 @@
 NAME
 
-libdsbmc – Library for writing clients for DSBMD.
+libdsbmc – Client library for DSBMD.
 
 
 SYNOPSIS
@@ -29,8 +29,8 @@ const char *dsbmc_errstr(void);
 
 DESCRIPTION
 
-The dsbmc_connect() function must be called before any other dsbmc function.
-It establishes a connection to DSBMD, and returns 0 on success, and -1 if
+dsbmc_connect() must be called before any other dsbmc function. It 
+establishes a connection to DSBMD, and returns 0 on success, and -1 if
 an error occured.
 
 The dsbmc_disconnect() function terminates the connection to DSBMD.
@@ -49,45 +49,46 @@ of dsbmc_dev_t * objects. The number of objects is returned.
 The dsbmc_get_fd() function returns the file descriptor of the socket which
 is connected to DSBMD. Its ONLY purpose is to use it with select().
 
-The dsbmc_mount() function mounts the device the given object represents.
+The dsbmc_mount() function mounts the device represented by the given object.
 The function blocks until a reply from DSBMD is received or an error occured.
 On success dsbmc_mount() returns 0. If mounting failed, an error code > 0
-is returned, and -1 on error. Possible error code are:
-DSBMC_ERR_ALREADY_MOUNTED, DSBMC_ERR_PERMISSION_DENIED, DSBMC_ERR_DEVICE_BUSY,
-DSBMC_ERR_NO_SUCH_DEVICE, DSBMC_ERR_NO_MEDIA, DSBMC_ERR_UNKNOWN_FILESYSTEM,
-DSBMC_ERR_UNKNOWN_ERROR, DSBMC_ERR_MNTCMD_FAILED, or an errno number.
+is returned, which can be one of DSBMC_ERR_ALREADY_MOUNTED, DSBMC_ERR_NO_MEDIA
+DSBMC_ERR_PERMISSION_DENIED, DSBMC_ERR_DEVICE_BUSY, DSBMC_ERR_NO_SUCH_DEVICE,
+DSBMC_ERR_UNKNOWN_FILESYSTEM, DSBMC_ERR_UNKNOWN_ERROR, DSBMC_ERR_MNTCMD_FAILED.
+If an error occured, -1 is returned, and the error bitmask is set accordingly.
 
-The dsbmc_unmount() function unmounts the device the given object represents.
+The dsbmc_unmount() function unmounts the device represented by the given object.
 The function blocks until a reply from DSBMD is received or an error occured.
 On success dsbmc_unmount() returns 0. If unmounting failed, an error code > 0
-is returned, and -1 on error. Possible error code are: DSBMC_ERR_NOT_MOUNTED,
-DSBMC_ERR_DEVICE_BUSY, or an errno number.
+is returned, which can be DSBMC_ERR_NOT_MOUNTED, DSBMC_ERR_DEVICE_BUSY, or an
+errno number. If an error occured, -1 is returned, and the error bitmask is set
+accordingly.
 
-The dsbmc_eject() function ejects the device the given object represents.
+The dsbmc_eject() function ejects the device represented by the given object.
 The function blocks until a reply from DSBMD is received or an error occured.
 On success dsbmc_eject() returns 0. If ejecting failed, an error code > 0
-is returned, and -1 on error. Possible error code are: DSBMC_ERR_NOT_EJECTABLE,
-DSBMC_ERR_DEVICE_BUSY, or an errno number.
+is returned, which can be DSBMC_ERR_NOT_EJECTABLE, DSBMC_ERR_DEVICE_BUSY, or an
+errno number. If an error occured, -1 is returned, and the error bitmask is set
+accordingly.
 
-The dsbmc_set_speed() function sets speed of the device the given object
-represents. The function blocks until a reply from DSBMD is received or an
-error occured. On success dsbmc_set_speed() returns 0. If it failed, an error
-code > 0 is returned, and -1 on error. Possible error code are:
-ERR_INVALID_ARGUMENT, or an errno number.
+The dsbmc_set_speed() function sets the reading speed of the optical device
+represented by the given object. The function blocks until a reply from DSBMD
+is received or an error occured. On success dsbmc_set_speed() returns 0. If it
+failed, an error code > 0 is returned, which can be ERR_INVALID_ARGUMENT, or an
+errno number. If an error occured, -1 is returned, and the error bitmask is set
+accordingly.
 
 The _async() variant of  dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(), and
 dsbmc_set_speed() return 0, and the given callback function will be executed
-by dsbmd_fetch_event() as soon as command-reply code is received. If an
-error occured, -1 is returned. The error code can be retrieved by calling
-dsbmd_get_err(). Possible error codes are DSBMC_ERR_LOST_CONNECTION,
-DSBMC_ERR_CMDQ_BUSY or a system error.
+by dsbmd_fetch_event() as soon as a command-reply code is received. If an
+error occured, -1 is returned, and the error bitmask is set accordingly.
 
 If the DSBMC_EVENT_DEL_DEVICE event was received, the device object should
 be removed from the list using dsbmc_free_dev() if it is no longer needed.
 
 If one of the functions failed with an error, the function dsbmc_get_err()
-can be used to retrieve the error code, and if errstr is not NULL, an error
-message.
+can be used to retrieve the error bitmask. If errstr is not NULL, it is
+set to the corresponding error message.
 
 The function dsbmc_errstr() returns the last error message.
 
@@ -177,4 +178,3 @@ DSBMC_ERR_NO_MEDIA
 DSBMC_ERR_UNKNOWN_FILESYSTEM
 DSBMC_ERR_UNKNOWN_ERROR
 DSBMC_ERR_MNTCMD_FAILED
-
