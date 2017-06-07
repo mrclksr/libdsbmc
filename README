@@ -78,7 +78,7 @@ failed, an error code > 0 is returned, which can be ERR_INVALID_ARGUMENT, or an
 errno number. If an error occured, -1 is returned, and the error bitmask is set
 accordingly.
 
-The _async() variant of  dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(), and
+The _async() variant of dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(), and
 dsbmc_set_speed() return 0, and the given callback function will be executed
 by dsbmd_fetch_event() as soon as a command-reply code is received. If an
 error occured, -1 is returned, and the error bitmask is set accordingly.
@@ -135,13 +135,13 @@ Event object definition:
 typedef struct dsbmc_event_s {
 	int type;			/* Event type */
 	int code;			/* Error code */
-	dsbmc_dev_t *dev;		/* Pointer into dev list */
+	dsbmc_dev_t *dev;		/* Device object the event refers to */
 } dsbmc_event_t;
 
 
 ERROR CODES
 
-dsbmc_get_err() return the following error codes as bitmask:
+dsbmc_get_err() returns the following error codes as bitmask:
 
 DSBMC_ERR_SYS
 	Syscall failed
