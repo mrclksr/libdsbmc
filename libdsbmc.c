@@ -167,8 +167,10 @@ static char	   *pull_event(void);
 static dsbmc_dev_t *add_device(const dsbmc_dev_t *d);
 static dsbmc_dev_t *lookup_device(const char *dev);
 
-static int  dsbmd, _error, ndevs, cmdqsz;
-static char errormsg[_POSIX2_LINE_MAX];
+static int    dsbmd, _error, ndevs, cmdqsz;
+static char   *lnbuf, errormsg[_POSIX2_LINE_MAX];
+static size_t rd, bufsz, slen;
+
 #define MAXDEVS	64
 dsbmc_dev_t *devs[MAXDEVS];
 
@@ -421,8 +423,9 @@ cleanup()
 	while (pull_event() != NULL)
 		;
 	(void)close(dsbmd);
+	free(lnbuf);
+	lnbuf = NULL; rd = slen = bufsz = 0;
 }
-
 
 static dsbmc_dev_t *
 add_device(const dsbmc_dev_t *d)
@@ -528,8 +531,6 @@ char *
 readln()
 {
 	int  i, n;
-	static char *p, *lnbuf = NULL;
-	static int rd = 0, bufsz = 0, slen = 0;
 
 	if (lnbuf == NULL) {
 		if ((lnbuf = malloc(_POSIX2_LINE_MAX)) == NULL)
@@ -553,10 +554,9 @@ readln()
 			return (lnbuf);
 		}
 		if (rd >= bufsz) {
-			p = realloc(lnbuf, bufsz + _POSIX2_LINE_MAX);
-			if (p == NULL)
-				return (NULL);
-			lnbuf  = p;
+			lnbuf = realloc(lnbuf, bufsz + _POSIX2_LINE_MAX);
+			if (lnbuf == NULL)
+				ERROR(NULL, ERR_SYS_FATAL, false, "realloc()");
 			bufsz += _POSIX2_LINE_MAX;
 		}
 	} while ((n = read(dsbmd, lnbuf + rd, bufsz - rd)) > 0);
