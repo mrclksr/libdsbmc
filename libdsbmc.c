@@ -545,7 +545,7 @@ readln()
 		slen = 0;
 		for (i = 0; i < rd && lnbuf[i] != '\n'; i++)
 			;
-		if (i < rd && lnbuf[i] == '\n') {
+		if (i < rd) {
 			lnbuf[i] = '\0';
 			slen = i + 1;
 			if (slen >= bufsz)
@@ -561,22 +561,17 @@ readln()
 		}
 	} while ((n = read(dsbmd, lnbuf + rd, bufsz - rd)) > 0);
 
-	if (rd > 0) {
-		lnbuf[rd] = '\0';
-		slen = rd = 0;
-		return (lnbuf);
-	} else if (n == 0) {
+	if (n == 0) {
+		rd = slen = 0;
 		ERROR(NULL, DSBMC_ERR_LOST_CONNECTION, false,
 		    "Lost connection to DSBMD");
 	} else if (n == -1) {
+		rd = slen = 0;
 		if (errno != EINTR && errno != EAGAIN)
 			ERROR(NULL, ERR_SYS_FATAL, false, "read()");
 	}
-	slen = rd = 0;
-
 	return (NULL);
 }
-
 
 static char *
 read_event(bool block)
@@ -586,9 +581,7 @@ read_event(bool block)
 	fd_set	    rset;
 
 	if ((ln = readln()) == NULL) {
-		if (_error &  DSBMC_ERR_LOST_CONNECTION)
-			return (NULL);
-		else if (!block)
+		if ((_error & DSBMC_ERR_LOST_CONNECTION) || !block)
 			return (NULL);
 	} else
 		return (ln);
