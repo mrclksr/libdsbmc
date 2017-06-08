@@ -25,6 +25,7 @@ int  dsbmc_get_err(const char **errstr);
 void dsbmc_disconnect(void);
 void dsbmc_free_dev(dsbmc_dev_t *dev);
 const char *dsbmc_errstr(void);
+const char *dsbmc_errcode_to_str(int code);
 
 
 DESCRIPTION
@@ -91,6 +92,9 @@ can be used to retrieve the error bitmask. If errstr is not NULL, it is
 set to the corresponding error message.
 
 The function dsbmc_errstr() returns the last error message.
+
+The dsbmc_errcode_to_str() function translates a DSBMD error-code into
+a string.
 
 
 OBJECTS
