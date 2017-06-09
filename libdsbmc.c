@@ -298,8 +298,6 @@ dsbmc_set_speed_async(dsbmc_dev_t *d, int speed,
 int
 dsbmc_size_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
-	int ret;
-
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
 	return (dsbmc_send_async(d, cb, "size %s\n", d->dev));
@@ -475,7 +473,6 @@ static int
 uconnect(const char *path)
 {
 	int  s;
-	FILE *sp;
 	struct sockaddr_un saddr;
 
 	if ((s = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1)
@@ -656,9 +653,8 @@ readln()
 static char *
 read_event(bool block)
 {
-	int	    fd;
-	char	    *p, *ln;
-	fd_set	    rset;
+	char   *ln;
+	fd_set rset;
 
 	if ((ln = readln()) == NULL) {
 		if ((_error & DSBMC_ERR_LOST_CONNECTION) || !block)
