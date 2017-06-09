@@ -50,6 +50,7 @@
 
 static struct dsbmc_sender_s {
 	int  retcode;
+	int  id;
 	char *cmd;
 	const dsbmc_dev_t *dev;
 	void (*callback)(int retcode, const dsbmc_dev_t *dev);
@@ -123,7 +124,8 @@ static const struct cmdtbl_s {
 	{ "mount",   DSBMC_CMD_MOUNT   },
 	{ "unmount", DSBMC_CMD_UNMOUNT },
 	{ "eject",   DSBMC_CMD_EJECT   },
-	{ "speed",   DSBMC_CMD_SPEED   }
+	{ "speed",   DSBMC_CMD_SPEED   },
+	{ "size",    DSBMC_CMD_SIZE    }
 };
 #define NCMDS (sizeof(cmdtbl) / sizeof(struct cmdtbl_s))
 
@@ -200,23 +202,36 @@ static size_t rd, bufsz, slen;
 dsbmc_dev_t *devs[MAXDEVS];
 
 int
-dsbmc_mount(const dsbmc_dev_t *d)
+dsbmc_mount(dsbmc_dev_t *d)
 {
+	int ret;
+
 	if (d == NULL || d->removed) 
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
-	return (dsbmc_send("mount %s\n", d->dev));
+	if ((ret = dsbmc_send("mount %s\n", d->dev)) == 0) {
+		d->mounted = true; free(d->mntpt);
+		d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
+		if (d->mntpt == NULL)
+			ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
+	}
+	return (ret);
 }
 
 int
-dsbmc_unmount(const dsbmc_dev_t *d)
+dsbmc_unmount(dsbmc_dev_t *d)
 {
+	int ret;
+
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
-	return (dsbmc_send("unmount %s\n", d->dev));
+	if ((ret = dsbmc_send("unmount %s\n", d->dev)) == 0) {
+		d->mounted = false; free(d->mntpt); d->mntpt = NULL;
+	}
+	return (ret);
 }
 
 int
-dsbmc_eject(const dsbmc_dev_t *d)
+dsbmc_eject(dsbmc_dev_t *d)
 {
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
@@ -224,16 +239,30 @@ dsbmc_eject(const dsbmc_dev_t *d)
 }
 
 int
-dsbmc_set_speed(const dsbmc_dev_t *d, int speed)
+dsbmc_size(dsbmc_dev_t *d)
+{
+	int ret;
+
+	if (d == NULL || d->removed)
+		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	if ((ret = dsbmc_send("size %s\n", d->dev)) == 0) {
+		d->mediasize = dsbmdevent.mediasize;
+		d->used = dsbmdevent.used;
+		d->free = dsbmdevent.free;
+	}
+	return (ret);
+}
+
+int
+dsbmc_set_speed(dsbmc_dev_t *d, int speed)
 {
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
 	return (dsbmc_send("speed %d %s", speed, d->dev));
 }
 
-
 int
-dsbmc_mount_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
+dsbmc_mount_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
@@ -241,7 +270,7 @@ dsbmc_mount_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 }
 
 int
-dsbmc_unmount_async(const dsbmc_dev_t *d,
+dsbmc_unmount_async(dsbmc_dev_t *d,
 	void (*cb)(int, const dsbmc_dev_t *))
 {
 	if (d == NULL || d->removed)
@@ -250,7 +279,7 @@ dsbmc_unmount_async(const dsbmc_dev_t *d,
 }
 
 int
-dsbmc_eject_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
+dsbmc_eject_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
@@ -258,12 +287,22 @@ dsbmc_eject_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 }
 
 int
-dsbmc_set_speed_async(const dsbmc_dev_t *d, int speed,
+dsbmc_set_speed_async(dsbmc_dev_t *d, int speed,
     void (*cb)(int, const dsbmc_dev_t *))
 {
 	if (d == NULL || d->removed)
 		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
 	return (dsbmc_send_async(d, cb, "speed %d %s", speed, d->dev));
+}
+
+int
+dsbmc_size_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
+{
+	int ret;
+
+	if (d == NULL || d->removed)
+		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	return (dsbmc_send_async(d, cb, "size %s\n", d->dev));
 }
 
 void
@@ -325,7 +364,6 @@ dsbmc_fetch_event(dsbmc_event_t *ev)
 	while ((e = read_event(false)) != NULL) {
 		if (push_event(e) == -1)
 			ERROR(-1, 0, true, "push_event()");
-		puts(e);
 	}
 	if (dsbmc_get_err(NULL) != 0)
 		ERROR(-1, 0, true, "read_event()");
@@ -367,9 +405,9 @@ dsbmc_connect()
 }
 
 int
-dsbmc_get_devlist(const dsbmc_dev_t ***list)
+dsbmc_get_devlist(dsbmc_dev_t ***list)
 {
-	*list = (const dsbmc_dev_t **)devs;
+	*list = (dsbmc_dev_t **)devs;
 
 	return (ndevs);
 }
@@ -488,6 +526,11 @@ add_device(const dsbmc_dev_t *d)
 		devs[ndevs]->mntpt   = NULL;
 		devs[ndevs]->mounted = false;
 	}
+	if (d->fsname != NULL) {
+		if ((devs[ndevs]->fsname = strdup(d->fsname)) == NULL)
+			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
+	} else
+		devs[ndevs]->fsname   = NULL;
 	devs[ndevs]->type  = d->type;
 	devs[ndevs]->cmds  = d->cmds;
 	devs[ndevs]->speed = d->speed;
@@ -741,8 +784,44 @@ process_event(char *buf)
 
 	if (parse_event(buf) != 0)
 		ERROR(-1, 0, true, "parse_event()");
+	if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG) {
+		switch (dsbmc_sender[0].id) {
+		case DSBMC_CMD_MOUNT:
+		case DSBMC_CMD_UNMOUNT:
+		case DSBMC_CMD_SPEED:
+		case DSBMC_CMD_SIZE:
+			d = lookup_device(dsbmdevent.devinfo.dev);
+			if (d == NULL) {
+				warnx("Unknown device %s", dsbmdevent.devinfo.dev);
+				return (-1);
+			}
+		}
+	} else {
+		switch (dsbmdevent.type) {
+		case DSBMC_EVENT_MOUNT:
+		case DSBMC_EVENT_UNMOUNT:
+		case DSBMC_EVENT_SPEED:
+			d = lookup_device(dsbmdevent.devinfo.dev);
+			if (d == NULL) {
+				warnx("Unknown device %s", dsbmdevent.devinfo.dev);
+				return (-1);
+			}
+		}
+	}
 	switch (dsbmdevent.type) {
 	case DSBMC_EVENT_SUCCESS_MSG:
+		if (dsbmc_sender[0].id == DSBMC_CMD_MOUNT) {
+			d->mounted = true; free(d->mntpt);
+			d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
+			if (d->mntpt == NULL)
+				ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
+		} else if (dsbmc_sender[0].id == DSBMC_CMD_UNMOUNT) {
+			d->mounted = false; free(d->mntpt); d->mntpt = NULL;
+		} else if (dsbmc_sender[0].id == DSBMC_CMD_SIZE) {
+			d->mediasize = dsbmdevent.mediasize;
+			d->used = dsbmdevent.used;
+			d->free = dsbmdevent.free;
+		}
 	case DSBMC_EVENT_ERROR_MSG:
 		if (cmdqsz <= 0)
 			return (0);
@@ -752,6 +831,7 @@ process_event(char *buf)
 			dsbmc_sender[i].dev = dsbmc_sender[i + 1].dev;
 			dsbmc_sender[i].callback = dsbmc_sender[i + 1].callback;
 			dsbmc_sender[i].cmd = dsbmc_sender[i + 1].cmd;
+			dsbmc_sender[i].id = dsbmc_sender[i + 1].id;
 		}
 		if (--cmdqsz == 0)
 			return (0);
@@ -759,32 +839,16 @@ process_event(char *buf)
 			ERROR(-1, 0, true, "send_string()");
 		return (0);
 	case DSBMC_EVENT_ADD_DEVICE:
-		if ((d = add_device(&dsbmdevent.devinfo)) == NULL) {
+		if ((d = add_device(&dsbmdevent.devinfo)) == NULL)
 			ERROR(-1, 0, true, "add_device()");
-		}
 		return (1);
 	case DSBMC_EVENT_DEL_DEVICE:
 		set_removed(dsbmdevent.devinfo.dev);
 		return (1);
 	case DSBMC_EVENT_END_OF_LIST:
 		return (0);
-	case DSBMC_EVENT_MOUNT:
-	case DSBMC_EVENT_UNMOUNT:
-	case DSBMC_EVENT_SPEED:
-		d = lookup_device(dsbmdevent.devinfo.dev);
-		if (d == NULL) {
-			warnx("Unknown device %s", dsbmdevent.devinfo.dev);
-			return (-1);
-		}
-		break;
 	case DSBMC_EVENT_SHUTDOWN:
 		return (1);
-	default:
-		warnx("Invalid event received.");
-		return (-1);
-	}
-
-	switch (dsbmdevent.type) {
 	case DSBMC_EVENT_MOUNT:
 		d->mounted = true; free(d->mntpt);
 		d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
@@ -798,6 +862,9 @@ process_event(char *buf)
 	case DSBMC_EVENT_SPEED:
 		d->speed = dsbmdevent.devinfo.speed;
 		return (1);
+	default:
+		warnx("Invalid event received.");
+		return (-1);
 	}
 	return (0);
 }
@@ -806,8 +873,9 @@ static int
 dsbmc_send_async(const dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
     const char *cmd, ...)
 {
-
+	int	i;
 	char	buf[_POSIX2_LINE_MAX];
+	size_t	len;
 	va_list ap;
 
 	dsbmc_clearerr();
@@ -819,6 +887,14 @@ dsbmc_send_async(const dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
 
 	dsbmc_sender[cmdqsz].dev = dev;
 	dsbmc_sender[cmdqsz].callback = cb;
+
+	for (i = 0; i < NCMDS; i++) {
+		len = strlen(cmdtbl[i].name);
+		if (strncmp(cmdtbl[i].name, cmd, len) == 0) {
+			dsbmc_sender[cmdqsz].id = cmdtbl[i].cmd;
+			break;
+		}
+	}
 	if ((dsbmc_sender[cmdqsz].cmd = strdup(buf)) == NULL)
 		ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
 	if (cmdqsz++ > 0)

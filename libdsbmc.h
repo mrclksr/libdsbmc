@@ -75,6 +75,7 @@ typedef struct dsbmc_dev_s {
 #define DSBMC_CMD_PLAY			(1 << 0x03)
 #define DSBMC_CMD_OPEN			(1 << 0x04)
 #define DSBMC_CMD_SPEED			(1 << 0x05)
+#define DSBMC_CMD_SIZE			(1 << 0x06)
 	char	 type;
 #define DSBMC_DT_HDD			0x01
 #define DSBMC_DT_USBDISK		0x02
@@ -107,16 +108,19 @@ typedef struct dsbmc_event_s {
 } dsbmc_event_t;
 
 extern int  dsbmc_fetch_event(dsbmc_event_t *ev);
-extern int  dsbmc_get_devlist(const dsbmc_dev_t ***list);
-extern int  dsbmc_mount(const dsbmc_dev_t *d);
-extern int  dsbmc_unmount(const dsbmc_dev_t *d);
-extern int  dsbmc_eject(const dsbmc_dev_t *d);
-extern int  dsbmc_set_speed(const dsbmc_dev_t *d, int speed);
-extern int  dsbmc_mount_async(const dsbmc_dev_t *d,
+extern int  dsbmc_get_devlist(dsbmc_dev_t ***);
+extern int  dsbmc_mount(dsbmc_dev_t *d);
+extern int  dsbmc_unmount(dsbmc_dev_t *d);
+extern int  dsbmc_eject(dsbmc_dev_t *d);
+extern int  dsbmc_set_speed(dsbmc_dev_t *d, int speed);
+extern int  dsbmc_speed(dsbmc_dev_t *d);
+extern int  dsbmc_mount_async(dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_unmount_async(const dsbmc_dev_t *d,
+extern int  dsbmc_unmount_async(dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_eject_async(const dsbmc_dev_t *d,
+extern int  dsbmc_eject_async(dsbmc_dev_t *d,
+		void (*cb)(int, const dsbmc_dev_t *));
+extern int  dsbmc_size_async(dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
 extern int  dsbmc_connect(void);
 extern int  dsbmc_get_fd(void);
