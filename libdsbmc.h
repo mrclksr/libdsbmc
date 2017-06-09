@@ -113,7 +113,9 @@ extern int  dsbmc_mount(dsbmc_dev_t *d);
 extern int  dsbmc_unmount(dsbmc_dev_t *d);
 extern int  dsbmc_eject(dsbmc_dev_t *d);
 extern int  dsbmc_set_speed(dsbmc_dev_t *d, int speed);
-extern int  dsbmc_speed(dsbmc_dev_t *d);
+extern int  dsbmc_size(dsbmc_dev_t *d);
+extern int  dsbmc_set_speed_async(dsbmc_dev_t *d, int speed,
+		void (*cb)(int, const dsbmc_dev_t *));
 extern int  dsbmc_mount_async(dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
 extern int  dsbmc_unmount_async(dsbmc_dev_t *d,
