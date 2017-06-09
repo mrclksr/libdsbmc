@@ -8,24 +8,29 @@ SYNOPSIS
 #include <libdsbmc.h>
 
 int  dsbmc_fetch_event(dsbmc_event_t *ev);
-int  dsbmc_get_devlist(const dsbmc_dev_t ***list);
-int  dsbmc_mount(const dsbmc_dev_t *dev);
-int  dsbmc_unmount(const dsbmc_dev_t *dev);
-int  dsbmc_eject(const dsbmc_dev_t *dev);
-int  dsbmc_set_speed(const dsbmc_dev_t *dev, int speed);
-int  dsbmc_mount_async(const dsbmc_dev_t *dev,
-		void (*cb)(int, const dsbmc_dev_t *dev));
-int  dsbmc_unmount_async(const dsbmc_dev_t *dev,
-		void (*cb)(int, const dsbmc_dev_t *dev));
-int  dsbmc_eject_async(const dsbmc_dev_t *dev,
-		void (*cb)(int, const dsbmc_dev_t *dev));
+int  dsbmc_get_devlist(dsbmc_dev_t ***);
+int  dsbmc_mount(dsbmc_dev_t *d);
+int  dsbmc_unmount(dsbmc_dev_t *d);
+int  dsbmc_eject(dsbmc_dev_t *d);
+int  dsbmc_set_speed(dsbmc_dev_t *d, int speed);
+int  dsbmc_size(dsbmc_dev_t *d);
+int  dsbmc_set_speed_async(dsbmc_dev_t *d, int speed,
+		void (*cb)(int, const dsbmc_dev_t *));
+int  dsbmc_mount_async(dsbmc_dev_t *d,
+		void (*cb)(int, const dsbmc_dev_t *));
+int  dsbmc_unmount_async(dsbmc_dev_t *d,
+		void (*cb)(int, const dsbmc_dev_t *));
+int  dsbmc_eject_async(dsbmc_dev_t *d,
+		void (*cb)(int, const dsbmc_dev_t *));
+int  dsbmc_size_async(dsbmc_dev_t *d,
+		void (*cb)(int, const dsbmc_dev_t *));
 int  dsbmc_connect(void);
 int  dsbmc_get_fd(void);
-int  dsbmc_get_err(const char **errstr);
+int  dsbmc_get_err(const char **);
 void dsbmc_disconnect(void);
-void dsbmc_free_dev(dsbmc_dev_t *dev);
+void dsbmc_free_dev(dsbmc_dev_t *);
 const char *dsbmc_errstr(void);
-const char *dsbmc_errcode_to_str(int code);
+const char *dsbmc_errcode_to_str(int);
 
 
 DESCRIPTION
@@ -78,6 +83,9 @@ is received or an error occured. On success dsbmc_set_speed() returns 0. If it
 failed, an error code > 0 is returned, which can be ERR_INVALID_ARGUMENT, or an
 errno number. If an error occured, -1 is returned, and the error bitmask is set
 accordingly.
+
+The dsbmc_size() function queries the storage capacity, the number of used and
+free bytes of the device represented by the given object.
 
 The _async() variant of dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(), and
 dsbmc_set_speed() return 0, and the given callback function will be executed
