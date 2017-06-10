@@ -48,6 +48,13 @@
 		return (ret); \
 	} while (0)
 
+#define VALIDATE(dev)						\
+	do {							\
+		if (d == NULL || d->removed) 			\
+			ERROR(-1, DSBMC_ERR_INVALID_DEVICE,	\
+			    false, "Invalid device");		\
+	} while (0)
+
 static struct dsbmc_sender_s {
 	int	     id;	/* DSBMC_CMD_.. */
 	int	     retcode;	/* Reply code from DSBMD */
@@ -201,13 +208,13 @@ static size_t rd, bufsz, slen;
 #define MAXDEVS	64
 dsbmc_dev_t *devs[MAXDEVS];
 
+
 int
 dsbmc_mount(dsbmc_dev_t *d)
 {
 	int ret;
 
-	if (d == NULL || d->removed) 
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	if ((ret = dsbmc_send("mount %s\n", d->dev)) == 0) {
 		d->mounted = true; free(d->mntpt);
 		d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
@@ -222,8 +229,7 @@ dsbmc_unmount(dsbmc_dev_t *d)
 {
 	int ret;
 
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	if ((ret = dsbmc_send("unmount %s\n", d->dev)) == 0) {
 		d->mounted = false; free(d->mntpt); d->mntpt = NULL;
 	}
@@ -233,8 +239,7 @@ dsbmc_unmount(dsbmc_dev_t *d)
 int
 dsbmc_eject(dsbmc_dev_t *d)
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send("eject %s\n", d->dev));
 }
 
@@ -243,8 +248,7 @@ dsbmc_size(dsbmc_dev_t *d)
 {
 	int ret;
 
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	if ((ret = dsbmc_send("size %s\n", d->dev)) == 0) {
 		d->mediasize = dsbmdevent.mediasize;
 		d->used = dsbmdevent.used;
@@ -256,16 +260,14 @@ dsbmc_size(dsbmc_dev_t *d)
 int
 dsbmc_set_speed(dsbmc_dev_t *d, int speed)
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send("speed %d %s", speed, d->dev));
 }
 
 int
 dsbmc_mount_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send_async(d, cb, "mount %s\n", d->dev));
 }
 
@@ -273,16 +275,14 @@ int
 dsbmc_unmount_async(dsbmc_dev_t *d,
 	void (*cb)(int, const dsbmc_dev_t *))
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send_async(d, cb, "unmount %s\n", d->dev));
 }
 
 int
 dsbmc_eject_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send_async(d, cb, "eject %s\n", d->dev));
 }
 
@@ -290,16 +290,14 @@ int
 dsbmc_set_speed_async(dsbmc_dev_t *d, int speed,
     void (*cb)(int, const dsbmc_dev_t *))
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send_async(d, cb, "speed %d %s", speed, d->dev));
 }
 
 int
 dsbmc_size_async(dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
-	if (d == NULL || d->removed)
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false, "Invalid device");
+	VALIDATE(d);
 	return (dsbmc_send_async(d, cb, "size %s\n", d->dev));
 }
 
