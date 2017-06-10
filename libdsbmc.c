@@ -531,55 +531,57 @@ add_device(const dsbmc_dev_t *d)
 		return (NULL);
 	if ((devs[ndevs] = malloc(sizeof(dsbmc_dev_t))) == NULL)
 		ERROR(NULL, ERR_SYS_FATAL, false, "malloc()");
-	if ((devs[ndevs]->dev = strdup(d->dev)) == NULL)
+	dp = devs[ndevs];
+
+	if ((dp->dev = strdup(d->dev)) == NULL)
 		ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
 	if (d->volid != NULL) {
-		if ((devs[ndevs]->volid = strdup(d->volid)) == NULL)
+		if ((dp->volid = strdup(d->volid)) == NULL)
 			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
 	} else
-		devs[ndevs]->volid = NULL;
+		dp->volid = NULL;
 	if (d->mntpt != NULL) {
-		if ((devs[ndevs]->mntpt = strdup(d->mntpt)) == NULL)
+		if ((dp->mntpt = strdup(d->mntpt)) == NULL)
 			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
-		devs[ndevs]->mounted = true;
+		dp->mounted = true;
 	} else {
-		devs[ndevs]->mntpt   = NULL;
-		devs[ndevs]->mounted = false;
+		dp->mntpt   = NULL;
+		dp->mounted = false;
 	}
 	if (d->fsname != NULL) {
-		if ((devs[ndevs]->fsname = strdup(d->fsname)) == NULL)
+		if ((dp->fsname = strdup(d->fsname)) == NULL)
 			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
 	} else
-		devs[ndevs]->fsname   = NULL;
-	devs[ndevs]->id	   = id++;
-	devs[ndevs]->type  = d->type;
-	devs[ndevs]->cmds  = d->cmds;
-	devs[ndevs]->speed = d->speed;
-	devs[ndevs]->removed = false;
+		dp->fsname = NULL;
+	dp->id	    = id++;
+	dp->type    = d->type;
+	dp->cmds    = d->cmds;
+	dp->speed   = d->speed;
+	dp->removed = false;
 
 	/* Add our own commands to the device's command list, and set VolIDs. */
 	switch (d->type) {
 	case DSBMC_DT_AUDIOCD:
-		devs[ndevs]->volid = strdup("Audio CD");
+		dp->volid = strdup("Audio CD");
 	case DSBMC_DT_DVD:
-		if (devs[ndevs]->volid == NULL)
-			devs[ndevs]->volid = strdup("DVD");
+		if (dp->volid == NULL)
+			dp->volid = strdup("DVD");
 	case DSBMC_DT_SVCD:
-		if (devs[ndevs]->volid == NULL)
-			devs[ndevs]->volid = strdup("SVCD");
+		if (dp->volid == NULL)
+			dp->volid = strdup("SVCD");
 	case DSBMC_DT_VCD:
-		if (devs[ndevs]->volid == NULL)
-			devs[ndevs]->volid = strdup("VCD");
+		if (dp->volid == NULL)
+			dp->volid = strdup("VCD");
 		/* Playable media. */
-		devs[ndevs]->cmds |= DSBMC_CMD_PLAY;
+		dp->cmds |= DSBMC_CMD_PLAY;
 	}
-	if (devs[ndevs]->volid == NULL)
-		devs[ndevs]->volid = strdup(d->dev);
-	if (devs[ndevs]->volid == NULL)
+	if (dp->volid == NULL)
+		dp->volid = strdup(d->dev);
+	if (dp->volid == NULL)
 		ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
 	if ((d->cmds & DSBMC_CMD_MOUNT)) {
 		/* Device we can open in a filemanager. */
-		devs[ndevs]->cmds |= DSBMC_CMD_OPEN;
+		dp->cmds |= DSBMC_CMD_OPEN;
 	}
 	return (devs[ndevs++]);
 }
