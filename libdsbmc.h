@@ -89,6 +89,7 @@ typedef struct dsbmc_dev_s {
 #define DSBMC_DT_MMC			0x0a
 #define DSBMC_DT_MTP			0x0b
 #define DSBMC_DT_PTP			0x0c
+	int	 id;
 	int	 speed;
 	char	 *dev;			/* Device name */
 	char	 *volid;		/* Volume ID */
@@ -108,21 +109,21 @@ typedef struct dsbmc_event_s {
 } dsbmc_event_t;
 
 extern int  dsbmc_fetch_event(dsbmc_event_t *ev);
-extern int  dsbmc_get_devlist(dsbmc_dev_t ***);
-extern int  dsbmc_mount(dsbmc_dev_t *d);
-extern int  dsbmc_unmount(dsbmc_dev_t *d);
-extern int  dsbmc_eject(dsbmc_dev_t *d);
-extern int  dsbmc_set_speed(dsbmc_dev_t *d, int speed);
-extern int  dsbmc_size(dsbmc_dev_t *d);
-extern int  dsbmc_set_speed_async(dsbmc_dev_t *d, int speed,
+extern int  dsbmc_get_devlist(const dsbmc_dev_t ***);
+extern int  dsbmc_mount(const dsbmc_dev_t *d);
+extern int  dsbmc_unmount(const dsbmc_dev_t *d);
+extern int  dsbmc_eject(const dsbmc_dev_t *d);
+extern int  dsbmc_set_speed(const dsbmc_dev_t *d, int speed);
+extern int  dsbmc_size(const dsbmc_dev_t *d);
+extern int  dsbmc_set_speed_async(const dsbmc_dev_t *d, int speed,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_mount_async(dsbmc_dev_t *d,
+extern int  dsbmc_mount_async(const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_unmount_async(dsbmc_dev_t *d,
+extern int  dsbmc_unmount_async(const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_eject_async(dsbmc_dev_t *d,
+extern int  dsbmc_eject_async(const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_size_async(dsbmc_dev_t *d,
+extern int  dsbmc_size_async(const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
 extern int  dsbmc_connect(void);
 extern int  dsbmc_get_fd(void);
