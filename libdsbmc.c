@@ -49,10 +49,10 @@
 	} while (0)
 
 static struct dsbmc_sender_s {
-	int  retcode;
-	int  id;
-	char *cmd;
-	const dsbmc_dev_t *dev;
+	int	     id;	/* DSBMC_CMD_.. */
+	int	     retcode;	/* Reply code from DSBMD */
+	char	    *cmd;	/* Command string */
+	dsbmc_dev_t *dev;
 	void (*callback)(int retcode, const dsbmc_dev_t *dev);
 } dsbmc_sender[CMDQMAXSZ];
 
@@ -181,7 +181,7 @@ static int	   send_string(const char *str);
 static int	   push_event(const char *e);
 static int	   parse_event(const char *str);
 static int	   process_event(char *buf);
-static int	   dsbmc_send_async(const dsbmc_dev_t *,
+static int	   dsbmc_send_async(dsbmc_dev_t *,
 			void (*cb)(int, const dsbmc_dev_t *), const char *cmd, ...);
 static int	   dsbmc_send(const char *cmd, ...);
 static void	   dsbmc_clearerr();
@@ -316,6 +316,18 @@ dsbmc_free_dev(dsbmc_dev_t *dev)
 	if (dev == NULL || !dev->removed)
 		return;
 	del_device(dev->dev);
+}
+
+static void
+cleanup()
+{
+	while (ndevs > 0) 
+		del_device(devs[0]->dev);
+	while (pull_event() != NULL)
+		;
+	(void)close(dsbmd);
+	free(lnbuf);
+	lnbuf = NULL; rd = slen = bufsz = 0;
 }
 
 int
@@ -485,18 +497,6 @@ uconnect(const char *path)
 	if (fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK) == -1)
 		ERROR(-1, ERR_SYS_FATAL, false, "setvbuf()/fcntl()");
 	return (s);
-}
-
-static void
-cleanup()
-{
-	while (ndevs > 0) 
-		del_device(devs[0]->dev);
-	while (pull_event() != NULL)
-		;
-	(void)close(dsbmd);
-	free(lnbuf);
-	lnbuf = NULL; rd = slen = bufsz = 0;
 }
 
 static dsbmc_dev_t *
@@ -780,19 +780,9 @@ process_event(char *buf)
 
 	if (parse_event(buf) != 0)
 		ERROR(-1, 0, true, "parse_event()");
-	if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG) {
-		switch (dsbmc_sender[0].id) {
-		case DSBMC_CMD_MOUNT:
-		case DSBMC_CMD_UNMOUNT:
-		case DSBMC_CMD_SPEED:
-		case DSBMC_CMD_SIZE:
-			d = lookup_device(dsbmdevent.devinfo.dev);
-			if (d == NULL) {
-				warnx("Unknown device %s", dsbmdevent.devinfo.dev);
-				return (-1);
-			}
-		}
-	} else {
+	if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG)
+		d = dsbmc_sender[0].dev;
+	else {
 		switch (dsbmdevent.type) {
 		case DSBMC_EVENT_MOUNT:
 		case DSBMC_EVENT_UNMOUNT:
@@ -866,7 +856,7 @@ process_event(char *buf)
 }
 
 static int
-dsbmc_send_async(const dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
+dsbmc_send_async(dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
     const char *cmd, ...)
 {
 	int	i;
