@@ -42,25 +42,22 @@
 #define PATH_DSBMD_SOCKET "/var/run/dsbmd.socket"
 #define ERR_SYS_FATAL	  (DSBMC_ERR_SYS|DSBMC_ERR_FATAL)
 
-#define ERROR(ret, error, prepend, fmt, ...) \
-	do { \
-		set_error(error, prepend, fmt, ##__VA_ARGS__); \
-		return (ret); \
-	} while (0)
+#define ERROR(ret, error, prepend, fmt, ...) do {		\
+	set_error(error, prepend, fmt, ##__VA_ARGS__);		\
+	return (ret);						\
+} while (0)
 
-#define VALIDATE(dev)						\
-	do {							\
-		if (dev == NULL || dev->removed) 			\
-			ERROR(-1, DSBMC_ERR_INVALID_DEVICE,	\
-			    false, "Invalid device");		\
-	} while (0)
+#define VALIDATE(dev) do {					\
+	if (dev == NULL || dev->removed)			\
+		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false,	\
+		    "Invalid device");				\
+} while (0)
 
-#define LOOKUP_DEV(arg, dev)				\
-	do {						\
-		VALIDATE(arg);				\
-		dev = device_from_id(arg->id);		\
-		VALIDATE(dev);				\
-	} while (0)
+#define LOOKUP_DEV(arg, dev) do {				\
+	VALIDATE(arg);						\
+	dev = device_from_id(arg->id);				\
+	VALIDATE(dev);						\
+} while (0)
 
 static struct dsbmc_sender_s {
 	int	     id;	/* DSBMC_CMD_.. */
@@ -818,9 +815,11 @@ process_event(char *buf)
 
 	if (parse_event(buf) != 0)
 		ERROR(-1, 0, true, "parse_event()");
-	if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG)
+	if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG) {
+		if (cmdqsz <= 0)
+			return (0);
 		d = dsbmc_sender[0].dev;
-	else {
+	} else {
 		switch (dsbmdevent.type) {
 		case DSBMC_EVENT_MOUNT:
 		case DSBMC_EVENT_UNMOUNT:
@@ -847,8 +846,6 @@ process_event(char *buf)
 			d->free = dsbmdevent.free;
 		}
 	case DSBMC_EVENT_ERROR_MSG:
-		if (cmdqsz <= 0)
-			return (0);
 		dsbmc_sender[0].callback(dsbmdevent.code, dsbmc_sender[0].dev);
 		free(dsbmc_sender[0].cmd);
 		for (i = 0; i < cmdqsz - 1; i++) {
