@@ -237,7 +237,7 @@ dsbmc_unmount(const dsbmc_dev_t *d)
 
 	LOOKUP_DEV(d, dev);
 	if ((ret = dsbmc_send("unmount %s\n", d->dev)) == 0) {
-		dev->mounted = false; free(dev->mntpt); dev->mntpt = NULL;
+		dev->mounted = false;
 	}
 	return (ret);
 }
@@ -839,7 +839,7 @@ process_event(char *buf)
 			if (d->mntpt == NULL)
 				ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
 		} else if (dsbmc_sender[0].id == DSBMC_CMD_UNMOUNT) {
-			d->mounted = false; free(d->mntpt); d->mntpt = NULL;
+			d->mounted = false;
 		} else if (dsbmc_sender[0].id == DSBMC_CMD_SIZE) {
 			d->mediasize = dsbmdevent.mediasize;
 			d->used = dsbmdevent.used;
@@ -877,8 +877,7 @@ process_event(char *buf)
 			ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
 		return (1);
 	case DSBMC_EVENT_UNMOUNT:
-		d->mounted = false; free(d->mntpt);
-		d->mntpt = NULL;
+		d->mounted = false;
 		return (1);
 	case DSBMC_EVENT_SPEED:
 		d->speed = dsbmdevent.devinfo.speed;
