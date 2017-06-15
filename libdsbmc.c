@@ -94,12 +94,14 @@ struct dsbmdkeyword_s {
 #define	KWTYPE_COMMANDS	0x03
 #define KWTYPE_INTEGER 	0x04
 #define KWTYPE_UINT64	0x05
-#define	KWTYPE_DSKTYPE	0x06
-#define KWTYPE_MSGTYPE	0x07
+#define KWTYPE_UINT8	0x06
+#define	KWTYPE_DSKTYPE	0x07
+#define KWTYPE_MSGTYPE	0x08
 	union val_u {
 		int	 *integer;
 		char	 *character;
 		char	 **string;
+		uint8_t  *uint8;
 		uint64_t *uint64;
 	} val;
 } dsbmdkeywords[] = {
@@ -118,7 +120,7 @@ struct dsbmdkeyword_s {
 	{ "volid=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.devinfo.volid  },
 	{ "mntpt=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.devinfo.mntpt  },
 	{ "type=",	KWTYPE_DSKTYPE,	 (val_t)&dsbmdevent.devinfo.type   },
-	{ "speed=",	KWTYPE_INTEGER,	 (val_t)&dsbmdevent.devinfo.speed  },
+	{ "speed=",	KWTYPE_UINT8,	 (val_t)&dsbmdevent.devinfo.speed  },
 	{ "code=",	KWTYPE_INTEGER,	 (val_t)&dsbmdevent.code	   },
 	{ "cmds=",	KWTYPE_COMMANDS, (val_t)(char *)0		   },
 	{ "mntcmderr=",	KWTYPE_INTEGER,	 (val_t)&dsbmdevent.mntcmderr	   },
@@ -129,8 +131,8 @@ struct dsbmdkeyword_s {
 #define NKEYWORDS (sizeof(dsbmdkeywords) / sizeof(struct dsbmdkeyword_s))
 
 static const struct cmdtbl_s {
-	char *name;
-	int  cmd;
+	char	*name;
+	uint8_t cmd;
 } cmdtbl[] = {
 	{ "mount",   DSBMC_CMD_MOUNT   },
 	{ "unmount", DSBMC_CMD_UNMOUNT },
@@ -145,7 +147,7 @@ static const struct cmdtbl_s {
  */
 static const struct disktypetbl_s {
         char   *name;
-        u_char type;
+        uint8_t type;
 } disktypetbl[] = {
         { "AUDIOCD", DSBMC_DT_AUDIOCD },
         { "DATACD",  DSBMC_DT_DATACD  },

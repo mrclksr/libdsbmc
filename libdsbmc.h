@@ -68,7 +68,7 @@ extern "C" {
 #define DSBMC_EVENT_SHUTDOWN		'S'
 
 typedef struct dsbmc_dev_s {
-	u_int	 cmds;			/* Supported commands. */
+	uint8_t cmds;			/* Supported commands. */
 #define DSBMC_CMD_MOUNT			(1 << 0x00)
 #define DSBMC_CMD_UNMOUNT		(1 << 0x01)
 #define DSBMC_CMD_EJECT			(1 << 0x02)
@@ -76,7 +76,7 @@ typedef struct dsbmc_dev_s {
 #define DSBMC_CMD_OPEN			(1 << 0x04)
 #define DSBMC_CMD_SPEED			(1 << 0x05)
 #define DSBMC_CMD_SIZE			(1 << 0x06)
-	char	 type;
+	uint8_t type;
 #define DSBMC_DT_HDD			0x01
 #define DSBMC_DT_USBDISK		0x02
 #define DSBMC_DT_DATACD			0x03
@@ -90,13 +90,13 @@ typedef struct dsbmc_dev_s {
 #define DSBMC_DT_MTP			0x0b
 #define DSBMC_DT_PTP			0x0c
 	int	 id;
-	int	 speed;
 	char	 *dev;			/* Device name */
 	char	 *volid;		/* Volume ID */
 	char	 *mntpt;		/* Mount point */
 	char	 *fsname;		/* Filesystem name */
 	bool	 mounted;		/* Whether drive is mounted. */
-	bool	 removed;
+	bool	 removed;		/* Whether device was removed */
+	uint8_t	 speed;			/* CD/DVD reading speed */
 	uint64_t mediasize;		/* For "size" command. */
 	uint64_t free;			/* 	 ""	       */
 	uint64_t used;			/* 	 ""	       */
