@@ -232,25 +232,26 @@ dsbmc_mount(const dsbmc_dev_t *d)
 }
 
 int
-dsbmc_unmount(const dsbmc_dev_t *d)
+dsbmc_unmount(const dsbmc_dev_t *d, bool force)
 {
 	int ret;
 	dsbmc_dev_t *dev;
 
 	LOOKUP_DEV(d, dev);
-	if ((ret = dsbmc_send("unmount %s\n", d->dev)) == 0) {
+	if ((ret = dsbmc_send(force ? "unmount -f %s\n" : "unmount %s\n",
+	    d->dev)) == 0) {
 		dev->mounted = false;
 	}
 	return (ret);
 }
 
 int
-dsbmc_eject(const dsbmc_dev_t *d)
+dsbmc_eject(const dsbmc_dev_t *d, bool force)
 {
 	dsbmc_dev_t *dev;
 
 	LOOKUP_DEV(d, dev);
-	return (dsbmc_send("eject %s\n", d->dev));
+	return (dsbmc_send(force ? "eject -f %s\n" : "eject %s\n", d->dev));
 }
 
 int
@@ -287,22 +288,25 @@ dsbmc_mount_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 }
 
 int
-dsbmc_unmount_async(const dsbmc_dev_t *d,
+dsbmc_unmount_async(const dsbmc_dev_t *d, bool force,
 	void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
 
 	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, "unmount %s\n", dev->dev));
+	return (dsbmc_send_async(dev, cb, force ? "unmount -f %s\n" : \
+	    "unmount %s\n", dev->dev));
 }
 
 int
-dsbmc_eject_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
+dsbmc_eject_async(const dsbmc_dev_t *d, bool force,
+	void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
 
 	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, "eject %s\n", dev->dev));
+	return (dsbmc_send_async(dev, cb, force ? "eject -f %s\n" : \
+	    "eject %s\n", dev->dev));
 }
 
 int
@@ -378,6 +382,8 @@ dsbmc_errcode_to_str(int code)
 {
 	int i;
 
+	if (code < (1 << 8))
+		return (strerror(code));
 	for (i = 0; i < NERRMSGS; i++) {
 		if (errmsgs[i].code == code)
 			return (errmsgs[i].msg);
