@@ -111,17 +111,17 @@ typedef struct dsbmc_event_s {
 extern int  dsbmc_fetch_event(dsbmc_event_t *ev);
 extern int  dsbmc_get_devlist(const dsbmc_dev_t ***);
 extern int  dsbmc_mount(const dsbmc_dev_t *d);
-extern int  dsbmc_unmount(const dsbmc_dev_t *d);
-extern int  dsbmc_eject(const dsbmc_dev_t *d);
+extern int  dsbmc_unmount(const dsbmc_dev_t *d, bool force);
+extern int  dsbmc_eject(const dsbmc_dev_t *d, bool force);
 extern int  dsbmc_set_speed(const dsbmc_dev_t *d, int speed);
 extern int  dsbmc_size(const dsbmc_dev_t *d);
 extern int  dsbmc_set_speed_async(const dsbmc_dev_t *d, int speed,
 		void (*cb)(int, const dsbmc_dev_t *));
 extern int  dsbmc_mount_async(const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_unmount_async(const dsbmc_dev_t *d,
+extern int  dsbmc_unmount_async(const dsbmc_dev_t *d, bool force,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_eject_async(const dsbmc_dev_t *d,
+extern int  dsbmc_eject_async(const dsbmc_dev_t *d, bool force,
 		void (*cb)(int, const dsbmc_dev_t *));
 extern int  dsbmc_size_async(const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
