@@ -32,6 +32,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -200,6 +201,7 @@ static int	   dsbmc_send(const char *cmd, ...);
 static void	   dsbmc_clearerr();
 static void	   set_error(int error, bool prepend, const char *fmt, ...);
 static void	   del_device(const char *);
+static void	   shuffle(void);
 static void	   cleanup(void);
 static char	   *readln(void);
 static char	   *read_event(bool block);
@@ -211,6 +213,7 @@ static dsbmc_dev_t *device_from_id(int id);
 static int    dsbmd, _error, ndevs, cmdqsz;
 static char   *lnbuf, errormsg[_POSIX2_LINE_MAX];
 static size_t rd, bufsz, slen;
+static pthread_mutex_t mutex;
 
 #define MAXDEVS	64
 dsbmc_dev_t *devs[MAXDEVS];
@@ -336,7 +339,7 @@ dsbmc_disconnect()
 }
 
 void
-dsbmc_free_dev(dsbmc_dev_t *dev)
+dsbmc_free_dev(const dsbmc_dev_t *dev)
 {
 	if (dev == NULL || !dev->removed)
 		return;
@@ -351,6 +354,7 @@ cleanup()
 	while (pull_event() != NULL)
 		;
 	(void)close(dsbmd);
+	(void)pthread_mutex_destroy(&mutex);
 	free(lnbuf);
 	lnbuf = NULL; rd = slen = bufsz = 0;
 }
@@ -397,21 +401,29 @@ dsbmc_fetch_event(dsbmc_event_t *ev)
 	int  error;
 	char *e;
 
+	(void)pthread_mutex_lock(&mutex);
 	dsbmc_clearerr();
 	while ((e = read_event(false)) != NULL) {
-		if (push_event(e) == -1)
+		if (push_event(e) == -1) {
+			(void)pthread_mutex_unlock(&mutex);
 			ERROR(-1, 0, true, "push_event()");
+		}
 	}
-	if (dsbmc_get_err(NULL) != 0)
+	if (dsbmc_get_err(NULL) != 0) {
+		(void)pthread_mutex_unlock(&mutex);
 		ERROR(-1, 0, true, "read_event()");
-	if ((e = pull_event()) == NULL)
+	}
+	if ((e = pull_event()) == NULL) {
+		(void)pthread_mutex_unlock(&mutex);
 		return (0);
+	}
 	if ((error = process_event(e)) == 1) {
 		ev->type = dsbmdevent.type;
 		ev->code = dsbmdevent.code;
 		if (dsbmdevent.devinfo.dev != NULL)
 			ev->dev = lookup_device(dsbmdevent.devinfo.dev);
 	}
+	(void)pthread_mutex_unlock(&mutex);
 	return (error);
 }
 
@@ -422,6 +434,8 @@ dsbmc_connect()
 
 	cmdqsz = ndevs = 0;
 	event_queue.n = event_queue.i = 0;
+
+	(void)pthread_mutex_init(&mutex, NULL);
 
 	if ((dsbmd = uconnect(PATH_DSBMD_SOCKET)) == -1) {
 		ERROR(-1, ERR_SYS_FATAL, false, "uconnect(%s)",
@@ -537,7 +551,6 @@ add_device(const dsbmc_dev_t *d)
 	if ((devs[ndevs] = malloc(sizeof(dsbmc_dev_t))) == NULL)
 		ERROR(NULL, ERR_SYS_FATAL, false, "malloc()");
 	dp = devs[ndevs];
-
 	if ((dp->dev = strdup(d->dev)) == NULL)
 		ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
 	if (d->volid != NULL) {
@@ -612,6 +625,24 @@ del_device(const char *dev)
 }
 
 static void
+shuffle()
+{
+	int i, n;
+
+	if (!devs[ndevs - 1]->removed)
+		return;
+	for (n = ndevs - 2; n >= 0 && devs[n]->removed; n--)
+		;
+	if (n++ < 0)
+		return;
+	if (ndevs + 1 > MAXDEVS)
+		return;
+	for (i = ndevs - 1; i >= n; i--)
+		devs[i + 1] = devs[i];
+	devs[n] = devs[ndevs];	
+}
+
+static void
 set_removed(const char *dev)
 {
 	dsbmc_dev_t *dp;
@@ -625,12 +656,18 @@ static dsbmc_dev_t *
 lookup_device(const char *dev)
 {
 	int i;
-
+	
 	if (dev == NULL)
 		return (NULL);
 	for (i = 0; i < ndevs; i++) {
+		if (strcmp(devs[i]->dev, dev) == 0 && !devs[i]->removed)
+			return (devs[i]);
+	
+	}
+	for (i = 0; i < ndevs; i++) {
 		if (strcmp(devs[i]->dev, dev) == 0)
 			return (devs[i]);
+	
 	}
 	return (NULL);
 }
@@ -873,6 +910,7 @@ process_event(char *buf)
 		return (1);
 	case DSBMC_EVENT_DEL_DEVICE:
 		set_removed(dsbmdevent.devinfo.dev);
+		shuffle();
 		return (1);
 	case DSBMC_EVENT_END_OF_LIST:
 		return (0);
@@ -905,11 +943,14 @@ dsbmc_send_async(dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
 	char	buf[_POSIX2_LINE_MAX];
 	size_t	len;
 	va_list ap;
-
+	
+	(void)pthread_mutex_lock(&mutex);
 	dsbmc_clearerr();
 
-	if (cmdqsz >= CMDQMAXSZ)
+	if (cmdqsz >= CMDQMAXSZ) {
+		(void)pthread_mutex_unlock(&mutex);
 		ERROR(-1, DSBMC_ERR_CMDQ_BUSY, false, "Command queue busy");
+	}
 	va_start(ap, cmd);
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
 
@@ -923,12 +964,19 @@ dsbmc_send_async(dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
 			break;
 		}
 	}
-	if ((dsbmc_sender[cmdqsz].cmd = strdup(buf)) == NULL)
+	if ((dsbmc_sender[cmdqsz].cmd = strdup(buf)) == NULL) {
+		(void)pthread_mutex_unlock(&mutex);
 		ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
-	if (cmdqsz++ > 0)
+	}
+	if (cmdqsz++ > 0) {
+		(void)pthread_mutex_lock(&mutex);
 		return (0);
-	if (send_string(buf) == -1)
+	}
+	if (send_string(buf) == -1) {
+		(void)pthread_mutex_unlock(&mutex);
 		ERROR(-1, 0, true, "send_string()");
+	}
+	(void)pthread_mutex_unlock(&mutex);
 	return (0);
 }
 
@@ -938,6 +986,7 @@ dsbmc_send(const char *cmd, ...)
 	char	buf[_POSIX2_LINE_MAX], *e;
 	va_list	ap;
 
+	(void)pthread_mutex_lock(&mutex);
 	dsbmc_clearerr();
 
 	if (cmdqsz > 0) {
@@ -947,18 +996,27 @@ dsbmc_send(const char *cmd, ...)
 	va_start(ap, cmd);
 	
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
-	if (send_string(buf) == -1)
+	if (send_string(buf) == -1) {
+		(void)pthread_mutex_unlock(&mutex);
 		ERROR(-1, 0, true, "send_string()");
-	while ((e = read_event(true)) != NULL) {
-		if (parse_event(e) == -1)
-			ERROR(-1, 0, true, "parse_event()");
-		if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG)
-			return (0);
-		else if (dsbmdevent.type == DSBMC_EVENT_ERROR_MSG)
-			return (dsbmdevent.code);
-		else if (push_event(e) == -1)
-			ERROR(-1, 0, true, "push_event()");
 	}
+	while ((e = read_event(true)) != NULL) {
+		if (parse_event(e) == -1) {
+			(void)pthread_mutex_unlock(&mutex);
+			ERROR(-1, 0, true, "parse_event()");
+		}
+		if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG) {
+			(void)pthread_mutex_unlock(&mutex);
+			return (0);
+		} else if (dsbmdevent.type == DSBMC_EVENT_ERROR_MSG) {
+			(void)pthread_mutex_unlock(&mutex);
+			return (dsbmdevent.code);
+		} else if (push_event(e) == -1) {
+			(void)pthread_mutex_unlock(&mutex);
+			ERROR(-1, 0, true, "push_event()");
+		}
+	}
+	(void)pthread_mutex_unlock(&mutex);
 	ERROR(-1, 0, true, "read_event()");
 }
 
