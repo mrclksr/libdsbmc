@@ -129,7 +129,7 @@ extern int  dsbmc_connect(void);
 extern int  dsbmc_get_fd(void);
 extern int  dsbmc_get_err(const char **);
 extern void dsbmc_disconnect(void);
-extern void dsbmc_free_dev(dsbmc_dev_t *);
+extern void dsbmc_free_dev(const dsbmc_dev_t *);
 extern const char *dsbmc_errstr(void);
 extern const char *dsbmc_errcode_to_str(int);
 
