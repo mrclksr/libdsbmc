@@ -1,5 +1,7 @@
 all:
 
 readme: readme.mdoc
-	groff -Tascii -m mdoc -P -cbdu readme.mdoc | sed '1,1d' > README
+	mandoc -mdoc readme.mdoc | perl -e 'foreach (<STDIN>) { \
+		$$_ =~ s/(.)\x08\1/$$1/g; $$_ =~ s/_\x08(.)/$$1/g; print $$_ \
+	}' | sed '1,1d' > README
 
