@@ -1,6 +1,6 @@
 
 NAME
-     libdsbmc -- Client library for DSBMD
+     libdsbmc – Client library for DSBMD
 
 SYNOPSIS
      #include <libdsbmc.h>
@@ -68,8 +68,8 @@ SYNOPSIS
      dsbmc_errcode_to_str(int code);
 
 DESCRIPTION
-     dsbmc_connect() must be called before any other dsbmc function. It estab-
-     lishes a connection to DSBMD, and returns 0 on success, and -1 if an
+     dsbmc_connect() must be called before any other dsbmc function. It
+     establishes a connection to DSBMD, and returns 0 on success, and -1 if an
      error occured.
 
      The dsbmc_disconnect() function terminates the connection to DSBMD.
@@ -126,10 +126,10 @@ DESCRIPTION
      used and free bytes of the device represented by the given object.
 
      The _async() variant of dsbmc_mount(), dsbmc_unmount, dsbmc_eject, and
-     dsbmc_set_speed() return 0, and the given callback function will be exe-
-     cuted by dsbmd_fetch_event() as soon as a command-reply code is received.
-     If an error occured, -1 is returned, and the error bitmask is set accord-
-     ingly.
+     dsbmc_set_speed() return 0, and the given callback function will be
+     executed by dsbmd_fetch_event() as soon as a command-reply code is
+     received. If an error occured, -1 is returned, and the error bitmask is
+     set accordingly.
 
      If the DSBMC_EVENT_DEL_DEVICE event was received, the device object
      should be removed from the list using dsbmc_free_dev() if it is no longer
@@ -145,9 +145,10 @@ DESCRIPTION
      string.
 
 THREADS
-     libdsbmc can be used together with threads. However, using multiple con-
-     nections to DSBMD established by dsbmc_connect() is not supported. Spe-
-     cial care must be taken when using dsbmc_free_dev() on multiple threads.
+     libdsbmc can be used together with threads. However, using multiple
+     connections to DSBMD established by dsbmc_connect() is not supported.
+     Special care must be taken when using dsbmc_free_dev() on multiple
+     threads.
 
 OBJECTS
      Device object definition:
