@@ -125,8 +125,8 @@ DESCRIPTION
      The dsbmc_size() function queries the storage capacity, the number of
      used and free bytes of the device represented by the given object.
 
-     The _async() variant of dsbmc_mount(), dsbmc_unmount, dsbmc_eject, and
-     dsbmc_set_speed() return 0, and the given callback function will be
+     The _async() variant of dsbmc_mount(), dsbmc_unmount(), dsbmc_eject(),
+     and dsbmc_set_speed() return 0, and the given callback function will be
      executed by dsbmd_fetch_event() as soon as a command-reply code is
      received. If an error occured, -1 is returned, and the error bitmask is
      set accordingly.
@@ -228,4 +228,4 @@ ERROR CODES
      DSBMC_ERR_SYNTAX_ERROR, DSBMC_ERR_NO_MEDIA, DSBMC_ERR_UNKNOWN_FILESYSTEM,
      DSBMC_ERR_UNKNOWN_ERROR, DSBMC_ERR_MNTCMD_FAILED
 
-                                 June 19, 2017
+                               December 10, 2017
