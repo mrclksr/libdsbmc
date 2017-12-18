@@ -445,6 +445,9 @@ dsbmc_connect()
 	while ((e = read_event(true)) != NULL) {
 		if (process_event(e) == -1)
 			ERROR(-1, 0, true, "parse_event()");
+		if (dsbmdevent.type == DSBMC_EVENT_ERROR_MSG &&
+		    dsbmdevent.code == DSBMC_ERR_PERMISSION_DENIED)
+			ERROR(-1, DSBMC_ERR_FATAL, false, "Permission denied");
 		if (dsbmdevent.type != DSBMC_EVENT_ADD_DEVICE &&
 		    dsbmdevent.type != DSBMC_EVENT_END_OF_LIST) {
 			ERROR(-1, ERR_SYS_FATAL, false,
@@ -878,6 +881,8 @@ process_event(char *buf)
 	}
 	switch (dsbmdevent.type) {
 	case DSBMC_EVENT_SUCCESS_MSG:
+		if (cmdqsz <= 0)
+			return (0);
 		if (dsbmc_sender[0].id == DSBMC_CMD_MOUNT) {
 			d->mounted = true; free(d->mntpt);
 			d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
@@ -891,6 +896,8 @@ process_event(char *buf)
 			d->free = dsbmdevent.free;
 		}
 	case DSBMC_EVENT_ERROR_MSG:
+		if (cmdqsz <= 0)
+			return (0);
 		dsbmc_sender[0].callback(dsbmdevent.code, dsbmc_sender[0].dev);
 		free(dsbmc_sender[0].cmd);
 		for (i = 0; i < cmdqsz - 1; i++) {
