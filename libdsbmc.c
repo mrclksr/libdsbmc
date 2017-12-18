@@ -446,8 +446,10 @@ dsbmc_connect()
 		if (process_event(e) == -1)
 			ERROR(-1, 0, true, "parse_event()");
 		if (dsbmdevent.type == DSBMC_EVENT_ERROR_MSG &&
-		    dsbmdevent.code == DSBMC_ERR_PERMISSION_DENIED)
-			ERROR(-1, DSBMC_ERR_FATAL, false, "Permission denied");
+		    dsbmdevent.code == DSBMC_ERR_PERMISSION_DENIED) {
+			ERROR(-1, DSBMC_ERR_FATAL | DSBMC_ERR_CONN_DENIED,
+			    false, "Permission denied");
+		}
 		if (dsbmdevent.type != DSBMC_EVENT_ADD_DEVICE &&
 		    dsbmdevent.type != DSBMC_EVENT_END_OF_LIST) {
 			ERROR(-1, ERR_SYS_FATAL, false,
