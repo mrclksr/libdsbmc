@@ -438,7 +438,7 @@ dsbmc_connect()
 	(void)pthread_mutex_init(&mutex, NULL);
 
 	if ((dsbmd = uconnect(PATH_DSBMD_SOCKET)) == -1) {
-		ERROR(-1, ERR_SYS_FATAL, false, "uconnect(%s)",
+		ERROR(-1, ERR_SYS_FATAL, true, "uconnect(%s)",
 		    PATH_DSBMD_SOCKET);
 	}
 	/* Get device list */
@@ -499,7 +499,7 @@ set_error(int error, bool prepend, const char *fmt, ...)
 		(void)vsnprintf(errbuf + len, sizeof(errbuf) - len, fmt, ap);
 
 		len = strlen(errbuf);
-		(void)snprintf(errbuf + len, sizeof(errbuf) - len, ":%s",
+		(void)snprintf(errbuf + len, sizeof(errbuf) - len, ": %s",
 		    errormsg);
 		(void)strcpy(errormsg, errbuf);
 	} else {
@@ -516,7 +516,7 @@ set_error(int error, bool prepend, const char *fmt, ...)
 	}
 	if ((error & DSBMC_ERR_SYS) && _errno != 0) {
 		len = strlen(errormsg);
-		(void)snprintf(errormsg + len, sizeof(errormsg) - len, ":%s",
+		(void)snprintf(errormsg + len, sizeof(errormsg) - len, ": %s",
 		    strerror(_errno));
 		errno = 0;
 	}
