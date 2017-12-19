@@ -47,7 +47,9 @@
 .Fn dsbmc_connect
 must be called before any other dsbmc function. It
 establishes a connection to DSBMD, and returns 0 on success, and -1 if
-an error occured.
+an error occured. If this function fails, DSBMC_ERR_CONN_DENIED is set in the
+error bitmask, or errno is set to any value defined in connect(2) and
+socket(2).
 .Pp
 The
 .Fn dsbmc_disconnect
@@ -238,6 +240,8 @@ Syscall failed
 Fatal error. Continuing the program is probably not possible.
 .It Er DSBMC_ERR_LOST_CONNECTION
 Connection to DSBMD lost.
+.It Er DSBMC_ERR_CONN_DENIED
+The client has no permission to connect to DSBMD.
 .It Er DSBMC_ERR_INVALID_DEVICE
 A NULL pointer or a pointer to a removed device object was passed.
 .It Er DSBMC_ERR_CMDQ_BUSY
