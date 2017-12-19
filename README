@@ -70,7 +70,9 @@ SYNOPSIS
 DESCRIPTION
      dsbmc_connect() must be called before any other dsbmc function. It
      establishes a connection to DSBMD, and returns 0 on success, and -1 if an
-     error occured.
+     error occured. If this function fails, DSBMC_ERR_CONN_DENIED is set in
+     the error bitmask, or errno is set to any value defined in connect(2) and
+     socket(2).
 
      The dsbmc_disconnect() function terminates the connection to DSBMD.
 
@@ -207,6 +209,9 @@ ERROR CODES
      DSBMC_ERR_LOST_CONNECTION
                         Connection to DSBMD lost.
 
+     DSBMC_ERR_CONN_DENIED
+                        The client has no permission to connect to DSBMD.
+
      DSBMC_ERR_INVALID_DEVICE
                         A NULL pointer or a pointer to a removed device object
                         was passed.
@@ -228,4 +233,4 @@ ERROR CODES
      DSBMC_ERR_SYNTAX_ERROR, DSBMC_ERR_NO_MEDIA, DSBMC_ERR_UNKNOWN_FILESYSTEM,
      DSBMC_ERR_UNKNOWN_ERROR, DSBMC_ERR_MNTCMD_FAILED
 
-                               December 10, 2017
+                               December 19, 2017
