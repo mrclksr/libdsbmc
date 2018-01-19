@@ -282,7 +282,7 @@ dsbmc_set_speed(const dsbmc_dev_t *d, int speed)
 	dsbmc_dev_t *dev;
 
 	LOOKUP_DEV(d, dev);
-	return (dsbmc_send("speed %d %s", speed, dev->dev));
+	return (dsbmc_send("speed %s %d\n", dev->dev, speed));
 }
 
 int
@@ -323,7 +323,7 @@ dsbmc_set_speed_async(const dsbmc_dev_t *d, int speed,
 	dsbmc_dev_t *dev;
 
 	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, "speed %d %s", speed, dev->dev));
+	return (dsbmc_send_async(dev, cb, "speed %s %d\n", dev->dev, speed));
 }
 
 int
