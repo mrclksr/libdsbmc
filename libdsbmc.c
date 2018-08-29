@@ -135,11 +135,12 @@ static const struct cmdtbl_s {
 	char	*name;
 	uint8_t cmd;
 } cmdtbl[] = {
-	{ "mount",   DSBMC_CMD_MOUNT   },
-	{ "unmount", DSBMC_CMD_UNMOUNT },
-	{ "eject",   DSBMC_CMD_EJECT   },
-	{ "speed",   DSBMC_CMD_SPEED   },
-	{ "size",    DSBMC_CMD_SIZE    }
+	{ "mount",    DSBMC_CMD_MOUNT    },
+	{ "unmount",  DSBMC_CMD_UNMOUNT  },
+	{ "eject",    DSBMC_CMD_EJECT    },
+	{ "speed",    DSBMC_CMD_SPEED    },
+	{ "size",     DSBMC_CMD_SIZE     },
+	{ "mdattach", DSBMC_CMD_MDATTACH }
 };
 #define NCMDS (sizeof(cmdtbl) / sizeof(struct cmdtbl_s))
 
@@ -286,6 +287,12 @@ dsbmc_set_speed(const dsbmc_dev_t *d, int speed)
 }
 
 int
+dsbmc_mdattach(const char *image)
+{
+	return (dsbmc_send("mdattach %s\n", image));
+}
+
+int
 dsbmc_mount_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
@@ -333,6 +340,12 @@ dsbmc_size_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 
 	LOOKUP_DEV(d, dev);
 	return (dsbmc_send_async(dev, cb, "size %s\n", dev->dev));
+}
+
+int
+dsbmc_mdattach_async(const char *image, void (*cb)(int, const dsbmc_dev_t *))
+{
+	return (dsbmc_send_async(NULL, cb, "mdattach %s\n", image));
 }
 
 void
