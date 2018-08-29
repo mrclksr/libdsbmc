@@ -29,6 +29,9 @@
 **dsbmc\_size**(*const dsbmc\_dev\_t \*d*);
 
 *int*  
+**dsbmc\_mdattach**(*const char \*image*);
+
+*int*  
 **dsbmc\_set\_speed\_async**(*const dsbmc\_dev\_t \*d*, *int speed*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
@@ -42,6 +45,9 @@
 
 *int*  
 **dsbmc\_size\_async**(*const dsbmc\_dev\_t \*d*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+
+*int*  
+**dsbmc\_mdattach\_async**(*const char \*image*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
 **dsbmc\_connect**(*void*);
@@ -166,13 +172,26 @@ function queries the storage capacity, the number of used and
 free bytes of the device represented by the given object.
 
 The
+**dsbmc\_mdattach**()
+function asks DSBMD to create a memory disk to access the given disk image.
+The function blocks until a reply from DSBMD is received or an error occured.
+On success
+**dsbmc\_mdattach**()
+returns 0, else an error code &gt; 0
+is returned, which can be
+`DSBMC_ERR_NOT_A_FILE`, `DSBMC_ERR_PERMISSION_DENIED`,
+or an errno number. If an error occured, -1 is returned, and the error
+bitmask is set accordingly.
+
+The
 **\_async**()
 variant of
 **dsbmc\_mount**(),
 **dsbmc\_unmount**(),
 **dsbmc\_eject**(),
+**dsbmc\_set\_speed**(),
 and
-**dsbmc\_set\_speed**()
+**dsbmc\_mdattach**()
 return 0, and the given callback function will be executed by
 **dsbmd\_fetch\_event**()
 as soon as a command-reply code is received. If an error occured, -1 is
@@ -221,6 +240,7 @@ Device object definition:
 	#define DSBMC_CMD_OPEN			(1 << 0x04)
 	#define DSBMC_CMD_SPEED			(1 << 0x05)
 	#define DSBMC_CMD_SIZE			(1 << 0x06)
+	#define DSBMC_CMD_MDATTACH		(1 << 0x07)
 		uint8_t type;
 	#define DSBMC_DT_HDD			0x01
 	#define DSBMC_DT_USBDISK		0x02
@@ -291,5 +311,5 @@ returns the following error codes as bitmask:
 
 Possible error codes of dsbmd events are:
 
-`DSBMC_ERR_ALREADY_MOUNTED, DSBMC_ERR_PERMISSION_DENIED, DSBMC_ERR_NOT_MOUNTED`, `DSBMC_ERR_DEVICE_BUSY`, `DSBMC_ERR_NO_SUCH_DEVICE`, `DSBMC_ERR_MAX_CONN_REACHED`, `DSBMC_ERR_NOT_EJECTABLE`, `DSBMC_ERR_UNKNOWN_COMMAND`, `DSBMC_ERR_UNKNOWN_OPTION`, `DSBMC_ERR_SYNTAX_ERROR`, `DSBMC_ERR_NO_MEDIA`, `DSBMC_ERR_UNKNOWN_FILESYSTEM`, `DSBMC_ERR_UNKNOWN_ERROR`, `DSBMC_ERR_MNTCMD_FAILED`
+`DSBMC_ERR_ALREADY_MOUNTED, DSBMC_ERR_PERMISSION_DENIED, DSBMC_ERR_NOT_MOUNTED`, `DSBMC_ERR_DEVICE_BUSY`, `DSBMC_ERR_NO_SUCH_DEVICE`, `DSBMC_ERR_MAX_CONN_REACHED`, `DSBMC_ERR_NOT_EJECTABLE`, `DSBMC_ERR_UNKNOWN_COMMAND`, `DSBMC_ERR_UNKNOWN_OPTION`, `DSBMC_ERR_SYNTAX_ERROR`, `DSBMC_ERR_NO_MEDIA`, `DSBMC_ERR_UNKNOWN_FILESYSTEM`, `DSBMC_ERR_UNKNOWN_ERROR`, `DSBMC_ERR_MNTCMD_FAILED, DSBMC_ERR_NOT_A_FILE`
 
