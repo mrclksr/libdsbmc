@@ -173,21 +173,25 @@ static const struct errmsg_s {
 	int  code;
 	char *msg;
 } errmsgs[] = {
-	{ DSBMC_ERR_ALREADY_MOUNTED,	"Device already mounted" },
-	{ DSBMC_ERR_PERMISSION_DENIED,	"Permission denied"	 },
-	{ DSBMC_ERR_NOT_MOUNTED,	"Device not mounted"	 },
-	{ DSBMC_ERR_DEVICE_BUSY,	"Device busy"		 },
-	{ DSBMC_ERR_NO_SUCH_DEVICE,	"No such device"	 },
-	{ DSBMC_ERR_NOT_EJECTABLE,	"Device not ejectable"	 },
-	{ DSBMC_ERR_UNKNOWN_COMMAND,	"Unknown command"	 },
-	{ DSBMC_ERR_UNKNOWN_OPTION,	"Unknown option"	 },
-	{ DSBMC_ERR_SYNTAX_ERROR,	"Syntax error"		 },
-	{ DSBMC_ERR_NO_MEDIA,		"No media"		 },
-	{ DSBMC_ERR_UNKNOWN_FILESYSTEM,	"Unknown filesystem"	 },
-	{ DSBMC_ERR_UNKNOWN_ERROR,	"Unknown error"		 },
-	{ DSBMC_ERR_MNTCMD_FAILED,	"Mount command failed"	 },
-	{ DSBMC_ERR_INVALID_ARGUMENT,	"Invalid argument"	 },
-	{ DSBMC_ERR_MAX_CONN_REACHED,	"Max. number of connections reached" }
+	{ DSBMC_ERR_ALREADY_MOUNTED,	"Device already mounted"   },
+	{ DSBMC_ERR_PERMISSION_DENIED,	"Permission denied"	   },
+	{ DSBMC_ERR_NOT_MOUNTED,	"Device not mounted"	   },
+	{ DSBMC_ERR_DEVICE_BUSY,	"Device busy"		   },
+	{ DSBMC_ERR_NO_SUCH_DEVICE,	"No such device"	   },
+	{ DSBMC_ERR_NOT_EJECTABLE,	"Device not ejectable"	   },
+	{ DSBMC_ERR_UNKNOWN_COMMAND,	"Unknown command"	   },
+	{ DSBMC_ERR_UNKNOWN_OPTION,	"Unknown option"	   },
+	{ DSBMC_ERR_SYNTAX_ERROR,	"Syntax error"		   },
+	{ DSBMC_ERR_NO_MEDIA,		"No media"		   },
+	{ DSBMC_ERR_UNKNOWN_FILESYSTEM,	"Unknown filesystem"	   },
+	{ DSBMC_ERR_UNKNOWN_ERROR,	"Unknown error"		   },
+	{ DSBMC_ERR_MNTCMD_FAILED,	"Mount command failed"	   },
+	{ DSBMC_ERR_INVALID_ARGUMENT,	"Invalid argument"	   },
+	{ DSBMC_ERR_MAX_CONN_REACHED,	"Max. number of connections reached" },
+	{ DSBMC_ERR_STRING_TOO_LONG,	"Command string too long"  },
+	{ DSBMC_ERR_BAD_STRING,		"Invalid command string"   },
+	{ DSBMC_ERR_TIMEOUT,		"Timeout"		   },
+	{ DSBMC_ERR_NOT_A_FILE,		"Not a regular file"	   },
 };
 #define NERRMSGS (sizeof(errmsgs) / sizeof(struct errmsg_s))
 
