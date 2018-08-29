@@ -55,6 +55,10 @@ extern "C" {
 #define DSBMC_ERR_UNKNOWN_ERROR		((1 << 8) + 0x0d)
 #define DSBMC_ERR_MNTCMD_FAILED		((1 << 8) + 0x0e)
 #define DSBMC_ERR_INVALID_ARGUMENT	((1 << 8) + 0x0f)
+#define DSBMC_ERR_STRING_TOO_LONG	((1 << 8) + 0x10)
+#define DSBMC_ERR_BAD_STRING		((1 << 8) + 0x11)
+#define DSBMC_ERR_TIMEOUT		((1 << 8) + 0x12)
+#define DSBMC_ERR_NOT_A_FILE		((1 << 8) + 0x13)
 
 #define DSBMC_EVENT_SUCCESS_MSG		'O'
 #define DSBMC_EVENT_WARNING_MSG		'W'
