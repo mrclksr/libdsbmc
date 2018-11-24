@@ -513,12 +513,11 @@ set_error(int error, bool prepend, const char *fmt, ...)
 				memmove(errormsg, errormsg + 13,
 				    strlen(errormsg) - 12);
 			}
-			(void)strncpy(errbuf, "Fatal error: ",
-			    sizeof(errbuf) - 1);
+			(void)strlcpy(errbuf, "Fatal error: ", sizeof(errbuf));
 			len = strlen(errbuf);
 		} else if (strncmp(errormsg, "Error: ", 7) == 0) {
 			memmove(errormsg, errormsg + 7, strlen(errormsg) - 6);
-			(void)strncpy(errbuf, "Error: ", sizeof(errbuf) - 1);
+			(void)strlcpy(errbuf, "Error: ", sizeof(errbuf));
 			len = strlen(errbuf);
  		} else
 			len = 0;
@@ -815,7 +814,7 @@ parse_event(const char *str)
 	static char buf[_POSIX2_LINE_MAX];
 
 	/* Init */
-	(void)strncpy(buf, str, sizeof(buf) - 1);
+	(void)strlcpy(buf, str, sizeof(buf));
 	for (i = 0; i < NKEYWORDS; i++) {
 		if (dsbmdkeywords[i].val.string != NULL)
 			*dsbmdkeywords[i].val.string = NULL;
