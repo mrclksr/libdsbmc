@@ -293,7 +293,7 @@ dsbmc_set_speed(const dsbmc_dev_t *d, int speed)
 int
 dsbmc_mdattach(const char *image)
 {
-	return (dsbmc_send("mdattach %s\n", image));
+	return (dsbmc_send("mdattach \"%s\"\n", image));
 }
 
 int
@@ -349,7 +349,7 @@ dsbmc_size_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
 int
 dsbmc_mdattach_async(const char *image, void (*cb)(int, const dsbmc_dev_t *))
 {
-	return (dsbmc_send_async(NULL, cb, "mdattach %s\n", image));
+	return (dsbmc_send_async(NULL, cb, "mdattach \"%s\"\n", image));
 }
 
 void
