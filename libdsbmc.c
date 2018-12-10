@@ -810,7 +810,7 @@ static int
 parse_event(const char *str)
 {
 	int	    i, len;
-	char	    *p, *q, *tmp;
+	char	    *p, *q, *tmp, *k, *c;
 	static char buf[_POSIX2_LINE_MAX];
 
 	/* Init */
@@ -819,38 +819,38 @@ parse_event(const char *str)
 		if (dsbmdkeywords[i].val.string != NULL)
 			*dsbmdkeywords[i].val.string = NULL;
 	}
-	for (p = buf; (p = strtok(p, ":\n")) != NULL; p = NULL) {
+	for (p = buf; (k = strsep(&p, ":\n")) != NULL;) {
 		for (i = 0; i < NKEYWORDS; i++) {
 			len = strlen(dsbmdkeywords[i].key);
-			if (strncmp(dsbmdkeywords[i].key, p, len) == 0)
+			if (strncmp(dsbmdkeywords[i].key, k, len) == 0)
 				break;
 		}
 		if (i == NKEYWORDS) {
-			warnx("Unknown keyword '%s'", p);
+			warnx("Unknown keyword '%s'", k);
 			continue;
 		}
 		switch (dsbmdkeywords[i].type) {
 		case KWTYPE_STRING:
-			*dsbmdkeywords[i].val.string = p + len;
+			*dsbmdkeywords[i].val.string = k + len;
 			break;
 		case KWTYPE_CHAR:
-			*dsbmdkeywords[i].val.character = *p;
+			*dsbmdkeywords[i].val.character = *k;
 			break;
 		case KWTYPE_INTEGER:
 			*dsbmdkeywords[i].val.integer =
-			    strtol(p + len, NULL, 10);
+			    strtol(k + len, NULL, 10);
 			break;
 		case KWTYPE_UINT64:
 			*dsbmdkeywords[i].val.uint64 =
-			    (uint64_t)strtoll(p + len, NULL, 10);
+			    (uint64_t)strtoll(k + len, NULL, 10);
 			break;
 		case KWTYPE_COMMANDS:
 			dsbmdevent.devinfo.cmds = 0;
-			if ((q = tmp = strdup(p + len)) == NULL)
+			if ((q = tmp = c = strdup(k + len)) == NULL)
 				ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
-			for (i = 0; (q = strtok(q, ",")) != NULL; q = NULL) {
+			while ((c = strsep(&q, ",")) != NULL) {
 				for (i = 0; i < NCMDS; i++) {
-					if (strcmp(cmdtbl[i].name, q) == 0) {
+					if (strcmp(cmdtbl[i].name, c) == 0) {
 						dsbmdevent.devinfo.cmds |=
 						    cmdtbl[i].cmd;
 					}
@@ -860,7 +860,7 @@ parse_event(const char *str)
 			break;
 		case KWTYPE_DSKTYPE:
 			for (i = 0; i < NDSKTYPES; i++) {
-				if (strcmp(disktypetbl[i].name, p + len) == 0) {
+				if (strcmp(disktypetbl[i].name, k + len) == 0) {
 					dsbmdevent.devinfo.type =
 					    disktypetbl[i].type;
 					break;
