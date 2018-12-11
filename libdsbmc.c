@@ -803,6 +803,7 @@ parse_event(dsbmc_t *dh, const char *str)
 			ERROR(dh, -1, ERR_SYS_FATAL, false, "realloc()");
 		dh->pbufsz = len;
 	}
+	bzero(&dh->event, sizeof(dh->event));
 	(void)strlcpy(dh->pbuf, str, len);
 
 	for (i = 0; i < nkwords; i++) {
