@@ -39,6 +39,7 @@
 #include <sys/select.h>
 #include "libdsbmc.h"
 
+#define BUFSZ		  64
 #define ERR_SYS_FATAL	  (DSBMC_ERR_SYS|DSBMC_ERR_FATAL)
 #define PATH_DSBMD_SOCKET "/var/run/dsbmd.socket"
 
@@ -58,7 +59,6 @@
 	dev = device_from_id(dh, arg->id);			\
 	VALIDATE(dh, dev);					\
 } while (0)
-
 
 typedef enum kwtype_e {
 	KWTYPE_CHAR = 1, KWTYPE_STRING, KWTYPE_COMMANDS, KWTYPE_INTEGER,
@@ -318,8 +318,9 @@ cleanup(dsbmc_t *dh)
 		del_device(dh, dh->devs[0]->dev);
 	for (i = 0; i < dh->evq.n; i++)
 		free(dh->evq.ln);
-	free(dh->lnbuf);
+	free(dh->lbuf);
 	free(dh->pbuf);
+	free(dh->sbuf);
 	free(dh);
 }
 
@@ -663,40 +664,39 @@ readln(dsbmc_t *dh)
 {
 	int  i, n;
 
-	if (dh->lnbuf == NULL) {
-		if ((dh->lnbuf = malloc(_POSIX2_LINE_MAX)) == NULL)
+	if (dh->lbuf == NULL) {
+		if ((dh->lbuf = malloc(BUFSZ)) == NULL)
 			return (NULL);
-		dh->bufsz = _POSIX2_LINE_MAX;
+		dh->lbufsz = BUFSZ;
 	}
 	n = 0;
 	do {
 		dh->rd += n;
 		if (dh->slen > 0) {
-			(void)memmove(dh->lnbuf, dh->lnbuf + dh->slen,
+			(void)memmove(dh->lbuf, dh->lbuf + dh->slen,
 			    dh->rd - dh->slen);
 		}
 		dh->rd  -= dh->slen;
 		dh->slen = 0;
-		for (i = 0; i < dh->rd && dh->lnbuf[i] != '\n'; i++)
+		for (i = 0; i < dh->rd && dh->lbuf[i] != '\n'; i++)
 			;
 		if (i < dh->rd) {
-			dh->lnbuf[i] = '\0';
+			dh->lbuf[i] = '\0';
 			dh->slen = i + 1;
-			if (dh->slen >= dh->bufsz)
+			if (dh->slen >= dh->lbufsz)
 				dh->slen = dh->rd = 0;
-			return (dh->lnbuf);
+			return (dh->lbuf);
 		}
-		if (dh->rd >= dh->bufsz) {
-			dh->lnbuf = realloc(dh->lnbuf, dh->bufsz +
-			    _POSIX2_LINE_MAX);
-			if (dh->lnbuf == NULL) {
+		if (dh->rd >= dh->lbufsz) {
+			dh->lbuf = realloc(dh->lbuf, dh->lbufsz + BUFSZ);
+			if (dh->lbuf == NULL) {
 				ERROR(dh, NULL, ERR_SYS_FATAL, false,
 				    "realloc()");
 			}
-			dh->bufsz += _POSIX2_LINE_MAX;
+			dh->lbufsz += BUFSZ;
 		}
-	} while ((n = read(dh->socket, dh->lnbuf + dh->rd,
-	    dh->bufsz - dh->rd)) > 0);
+	} while ((n = read(dh->socket, dh->lbuf + dh->rd,
+	    dh->lbufsz - dh->rd)) > 0);
 
 	if (n == 0) {
 		dh->rd = dh->slen = 0;
@@ -962,17 +962,28 @@ dsbmc_send_async(dsbmc_t *dh, dsbmc_dev_t *dev,
 	void (*cb)(int, const dsbmc_dev_t *), const char *cmd, ...)
 {
 	int	i;
-	char	buf[_POSIX2_LINE_MAX];
+	char	*p;
 	size_t	len;
 	va_list ap;
 	
 	dsbmc_clearerr(dh);
-
 	if (dh->cmdqsz >= DSBMC_CMDQMAXSZ)
 		ERROR(dh, -1, DSBMC_ERR_CMDQ_BUSY, false, "Command queue busy");
-	va_start(ap, cmd);
-	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
-
+	if (dh->sbufsz == 0) {
+		if ((dh->sbuf = malloc(BUFSZ)) == NULL)
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "malloc()");
+		dh->sbufsz = BUFSZ;
+	}
+	for (;;) {
+		va_start(ap, cmd);
+		if (vsnprintf(dh->sbuf, dh->sbufsz, cmd, ap) < dh->sbufsz)
+			break;
+		/* Send buffer too small. */
+		if ((p = realloc(dh->sbuf, BUFSZ + dh->sbufsz)) == NULL)
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "realloc()");
+		dh->sbuf    = p;
+		dh->sbufsz += BUFSZ;
+	}
 	dh->sender[dh->cmdqsz].dev = dev;
 	dh->sender[dh->cmdqsz].callback = cb;
 
@@ -983,11 +994,11 @@ dsbmc_send_async(dsbmc_t *dh, dsbmc_dev_t *dev,
 			break;
 		}
 	}
-	if ((dh->sender[dh->cmdqsz].cmd = strdup(buf)) == NULL)
+	if ((dh->sender[dh->cmdqsz].cmd = strdup(dh->sbuf)) == NULL)
 		ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
 	if ((dh->cmdqsz)++ > 0)
 		return (0);
-	if (send_string(dh, buf) == -1)
+	if (send_string(dh, dh->sbuf) == -1)
 		ERROR(dh, -1, 0, true, "send_string()");
 	return (0);
 }
@@ -995,7 +1006,7 @@ dsbmc_send_async(dsbmc_t *dh, dsbmc_dev_t *dev,
 static int
 dsbmc_send(dsbmc_t *dh, const char *cmd, ...)
 {
-	char	buf[_POSIX2_LINE_MAX], *e;
+	char	*e, *p;
 	va_list	ap;
 
 	dsbmc_clearerr(dh);
@@ -1004,10 +1015,22 @@ dsbmc_send(dsbmc_t *dh, const char *cmd, ...)
 		ERROR(dh, -1, DSBMC_ERR_COMMAND_IN_PROGRESS, false,
 		    "dsbmc_send(): Command already in progress");
 	}
-	va_start(ap, cmd);
-	
-	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
-	if (send_string(dh, buf) == -1)
+	if (dh->sbufsz == 0) {
+		if ((dh->sbuf = malloc(BUFSZ)) == NULL)
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "malloc()");
+		dh->sbufsz = BUFSZ;
+	}
+	for (;;) {
+		va_start(ap, cmd);
+		if (vsnprintf(dh->sbuf, dh->sbufsz, cmd, ap) < dh->sbufsz)
+			break;
+		/* Send buffer too small. */
+		if ((p = realloc(dh->sbuf, BUFSZ + dh->sbufsz)) == NULL)
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "realloc()");
+		dh->sbuf    = p;
+		dh->sbufsz += BUFSZ;
+	}
+	if (send_string(dh, dh->sbuf) == -1)
 		ERROR(dh, -1, 0, true, "send_string()");
 	while ((e = read_event(dh, true)) != NULL) {
 		if (parse_event(dh, e) == -1)
