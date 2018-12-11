@@ -143,12 +143,14 @@ typedef struct dsbmd_event_s {
 typedef struct dsbmc_s {
 	int	       socket;
 	int	       error;
-	char	       *lnbuf;
-	char	       *pbuf;
+	char	       *lbuf;	/* Buffer for reading lines from socket */
+	char	       *pbuf;	/* Parser buffer */
+	char	       *sbuf;	/* Send buffer */
 	char	       errormsg[_POSIX2_LINE_MAX];
 	size_t	       rd;
-	size_t	       bufsz;
+	size_t	       lbufsz;
 	size_t	       pbufsz;
+	size_t	       sbufsz;
 	size_t	       slen;
 	size_t	       ndevs;
 	size_t	       cmdqsz;
