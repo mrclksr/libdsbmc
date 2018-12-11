@@ -6,50 +6,59 @@
 .Sh SYNOPSIS
 .In libdsbmc.h
 .Ft int
-.Fn dsbmc_fetch_event "dsbmc_event_t *ev"
+.Fn dsbmc_fetch_event "dsbmc_t *handle" "dsbmc_event_t *ev"
 .Ft int
-.Fn dsbmc_get_devlist "const dsbmc_dev_t ***"
+.Fn dsbmc_get_devlist "dsbmc_t *handle" "const dsbmc_dev_t ***list"
 .Ft int
-.Fn dsbmc_mount "const dsbmc_dev_t *d"
+.Fn dsbmc_mount "dsbmc_t *handle" "const dsbmc_dev_t *d"
 .Ft int
-.Fn dsbmc_unmount "const dsbmc_dev_t *d" "bool force"
+.Fn dsbmc_unmount "dsbmc_t *handle" "const dsbmc_dev_t *d" "bool force"
 .Ft int
-.Fn dsbmc_eject "const dsbmc_dev_t *d" "bool force"
+.Fn dsbmc_eject "dsbmc_t *handle" "const dsbmc_dev_t *d" "bool force"
 .Ft int
-.Fn dsbmc_set_speed "const dsbmc_dev_t *d" "int speed"
+.Fn dsbmc_set_speed "dsbmc_t *handle" "const dsbmc_dev_t *d" "int speed"
 .Ft int
-.Fn dsbmc_size "const dsbmc_dev_t *d"
+.Fn dsbmc_size "dsbmc_t *handle" "const dsbmc_dev_t *d"
 .Ft int
-.Fn dsbmc_mdattach "const char *image"
+.Fn dsbmc_mdattach "dsbmc_t *handle" "const char *image"
 .Ft int
-.Fn dsbmc_set_speed_async "const dsbmc_dev_t *d" "int speed" "void (*cb)(int, const dsbmc_dev_t *)"
+.Fn dsbmc_set_speed_async "dsbmc_t *handle" "const dsbmc_dev_t *d" "int speed" "void (*cb)(int, const dsbmc_dev_t *)"
 .Ft int
-.Fn dsbmc_mount_async "const dsbmc_dev_t *d" "void (*cb)(int, const dsbmc_dev_t *)"
+.Fn dsbmc_mount_async "dsbmc_t *handle" "const dsbmc_dev_t *d" "void (*cb)(int, const dsbmc_dev_t *)"
 .Ft int
-.Fn dsbmc_unmount_async "const dsbmc_dev_t *d" "bool force" "void (*cb)(int, const dsbmc_dev_t *)"
+.Fn dsbmc_unmount_async "dsbmc_t *handle" "const dsbmc_dev_t *d" "bool force" "void (*cb)(int, const dsbmc_dev_t *)"
 .Ft int
-.Fn dsbmc_eject_async "const dsbmc_dev_t *d" "bool force" "void (*cb)(int, const dsbmc_dev_t *)"
+.Fn dsbmc_eject_async "dsbmc_t *handle" "const dsbmc_dev_t *d" "bool force" "void (*cb)(int, const dsbmc_dev_t *)"
 .Ft int
-.Fn dsbmc_size_async "const dsbmc_dev_t *d" "void (*cb)(int, const dsbmc_dev_t *)"
+.Fn dsbmc_size_async "dsbmc_t *handle" "const dsbmc_dev_t *d" "void (*cb)(int, const dsbmc_dev_t *)"
 .Ft int
-.Fn dsbmc_mdattach_async "const char *image" "void (*cb)(int, const dsbmc_dev_t *)"
+.Fn dsbmc_mdattach_async "dsbmc_t *handle" "const char *image" "void (*cb)(int, const dsbmc_dev_t *)"
 .Ft int
-.Fn dsbmc_connect "void"
+.Fn dsbmc_connect "dsbmc_t *handle"
 .Ft int
-.Fn dsbmc_get_fd "void"
+.Fn dsbmc_get_fd "dsbmc_t *handle"
 .Ft int
-.Fn dsbmc_get_err "const char **"
+.Fn dsbmc_get_err "dsbmc_t *handle" "const char **buf"
 .Ft void
-.Fn dsbmc_disconnect "void"
+.Fn dsbmc_disconnect "dsbmc_t *handle"
 .Ft void
-.Fn dsbmc_free_dev "const dsbmc_dev_t *"
+.Fn dsbmc_free_handle "dsbmc_t *handle"
+.Ft void
+.Fn dsbmc_free_dev "dsbmc_t *handle" "const dsbmc_dev_t *dev"
 .Ft "const char *"
-.Fn dsbmc_errstr "void"
+.Fn dsbmc_errstr "dsbmc_t *handle"
 .Ft "const char *"
 .Fn dsbmc_errcode_to_str "int code"
+.Ft dsbmc_t *
+.Fn dsbmc_alloc_handle "void"
 .Sh DESCRIPTION
+Almost all functions operate on a handle of type
+.Vt "dsbmc_t".
+.Fn dsbmc_alloc_handle
+creates and initializes a handle, and returns a pointer to it. If an error
+occured, NULL is returned.
+.Pp
 .Fn dsbmc_connect
-must be called before any other dsbmc function. It
 establishes a connection to DSBMD, and returns 0 on success, and -1 if
 an error occured. If this function fails, DSBMC_ERR_CONN_DENIED is set in the
 error bitmask, or errno is set to any value defined in connect(2) and
@@ -58,6 +67,9 @@ socket(2).
 The
 .Fn dsbmc_disconnect
 function terminates the connection to DSBMD.
+.Pp
+.Fn dsbmc_free_handle
+frees the memory used by the handle.
 .Pp
 The
 .Fn dsbmc_fetch_event
@@ -194,12 +206,8 @@ The
 function translates a DSBMD error-code into a string.
 .Sh THREADS
 .Nm libdsbmc
-can be used together with threads. However, using multiple connections to
-DSBMD established by
-.Fn dsbmc_connect
-is not supported. Special care must be taken when using
-.Fn dsbmc_free_dev
-on multiple threads.
+can be used together with threads. However, access to a single handle from
+multiple threads must be synchronized, e.g. by using a mutex.
 .Sh OBJECTS
 Device object definition:
 .Bd -literal -offset indent
