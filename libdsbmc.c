@@ -39,65 +39,36 @@
 #include <sys/select.h>
 #include "libdsbmc.h"
 
-#define CMDQMAXSZ	  32
-#define PATH_DSBMD_SOCKET "/var/run/dsbmd.socket"
 #define ERR_SYS_FATAL	  (DSBMC_ERR_SYS|DSBMC_ERR_FATAL)
+#define PATH_DSBMD_SOCKET "/var/run/dsbmd.socket"
 
-#define ERROR(ret, error, prepend, fmt, ...) do {		\
-	set_error(error, prepend, fmt, ##__VA_ARGS__);		\
+#define ERROR(dh, ret, error, prepend, fmt, ...) do {		\
+	set_error(dh, error, prepend, fmt, ##__VA_ARGS__);	\
 	return (ret);						\
 } while (0)
 
-#define VALIDATE(dev) do {					\
+#define VALIDATE(dh, dev) do {					\
 	if (dev == NULL || dev->removed)			\
-		ERROR(-1, DSBMC_ERR_INVALID_DEVICE, false,	\
+		ERROR(dh, -1, DSBMC_ERR_INVALID_DEVICE, false,	\
 		    "Invalid device");				\
 } while (0)
 
-#define LOOKUP_DEV(arg, dev) do {				\
-	VALIDATE(arg);						\
-	dev = device_from_id(arg->id);				\
-	VALIDATE(dev);						\
+#define LOOKUP_DEV(dh, arg, dev) do {				\
+	VALIDATE(dh, arg);					\
+	dev = device_from_id(dh, arg->id);			\
+	VALIDATE(dh, dev);					\
 } while (0)
 
-static struct dsbmc_sender_s {
-	int	     id;	/* DSBMC_CMD_.. */
-	int	     retcode;	/* Reply code from DSBMD */
-	char	    *cmd;	/* Command string */
-	dsbmc_dev_t *dev;
-	void (*callback)(int retcode, const dsbmc_dev_t *dev);
-} dsbmc_sender[CMDQMAXSZ];
 
-static struct event_queue_s {
-	int  n;			/* # of events in queue */
-	int  i;			/* Current index */
-#define MAXEQSZ	64
-	char *ln[MAXEQSZ];
-} event_queue = { 0, 0 };
-
-struct dsbmdevent_s {
-	char	    type;	/* Event type. */
-	char	    *command;	/* In case of a reply, the executed command. */
-	int	    mntcmderr;	/* Return code of external mount command. */
-	int	    code;	/* The error code */
-	uint64_t    mediasize;	/* For "size" command. */
-	uint64_t    free;	/* 	 ""	       */
-	uint64_t    used;	/* 	 ""	       */
-	dsbmc_dev_t devinfo;	/* For Add/delete/mount/unmount message. */
-} dsbmdevent;
+typedef enum kwtype_e {
+	KWTYPE_CHAR = 1, KWTYPE_STRING, KWTYPE_COMMANDS, KWTYPE_INTEGER,
+	KWTYPE_UINT64, KWTYPE_UINT8, KWTYPE_DSKTYPE
+} kwtype_t;
 
 typedef union val_u val_t;
 struct dsbmdkeyword_s {
 	const char *key;
-	u_char	   type;
-#define	KWTYPE_CHAR	0x01
-#define	KWTYPE_STRING	0x02
-#define	KWTYPE_COMMANDS	0x03
-#define KWTYPE_INTEGER 	0x04
-#define KWTYPE_UINT64	0x05
-#define KWTYPE_UINT8	0x06
-#define	KWTYPE_DSKTYPE	0x07
-#define KWTYPE_MSGTYPE	0x08
+	kwtype_t   type;
 	union val_u {
 		int	 *integer;
 		char	 *character;
@@ -105,31 +76,7 @@ struct dsbmdkeyword_s {
 		uint8_t  *uint8;
 		uint64_t *uint64;
 	} val;
-} dsbmdkeywords[] = {
-	{ "+",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "-",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "E",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "O",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "M",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "U",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "V",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "S",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "=",		KWTYPE_CHAR,	 (val_t)&dsbmdevent.type	   },
-	{ "command=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.command	   },
-	{ "dev=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.devinfo.dev    },
-	{ "fs=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.devinfo.fsname },
-	{ "volid=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.devinfo.volid  },
-	{ "mntpt=",	KWTYPE_STRING,	 (val_t)&dsbmdevent.devinfo.mntpt  },
-	{ "type=",	KWTYPE_DSKTYPE,	 (val_t)&dsbmdevent.devinfo.type   },
-	{ "speed=",	KWTYPE_UINT8,	 (val_t)&dsbmdevent.devinfo.speed  },
-	{ "code=",	KWTYPE_INTEGER,	 (val_t)&dsbmdevent.code	   },
-	{ "cmds=",	KWTYPE_COMMANDS, (val_t)(char *)0		   },
-	{ "mntcmderr=",	KWTYPE_INTEGER,	 (val_t)&dsbmdevent.mntcmderr	   },
-	{ "mediasize=", KWTYPE_UINT64,	 (val_t)&dsbmdevent.mediasize	   },
-	{ "used=",	KWTYPE_UINT64,	 (val_t)&dsbmdevent.used	   },
-	{ "free=",	KWTYPE_UINT64,	 (val_t)&dsbmdevent.free	   }
 };
-#define NKEYWORDS (sizeof(dsbmdkeywords) / sizeof(struct dsbmdkeyword_s))
 
 static const struct cmdtbl_s {
 	char	*name;
@@ -195,62 +142,54 @@ static const struct errmsg_s {
 };
 #define NERRMSGS (sizeof(errmsgs) / sizeof(struct errmsg_s))
 
-static int	   uconnect(const char *path);
-static int	   send_string(const char *str);
-static int	   push_event(const char *e);
-static int	   parse_event(const char *str);
-static int	   process_event(char *buf);
-static int	   dsbmc_send_async(dsbmc_dev_t *,
-			void (*cb)(int, const dsbmc_dev_t *), const char *cmd, ...);
-static int	   dsbmc_send(const char *cmd, ...);
-static void	   dsbmc_clearerr();
-static void	   set_error(int error, bool prepend, const char *fmt, ...);
-static void	   del_device(const char *);
-static void	   shuffle(void);
-static void	   cleanup(void);
-static char	   *readln(void);
-static char	   *read_event(bool block);
-static char	   *pull_event(void);
-static dsbmc_dev_t *add_device(const dsbmc_dev_t *d);
-static dsbmc_dev_t *lookup_device(const char *dev);
-static dsbmc_dev_t *device_from_id(int id);
-
-static int    dsbmd, _error, ndevs, cmdqsz;
-static char   *lnbuf, errormsg[_POSIX2_LINE_MAX];
-static size_t rd, bufsz, slen;
-static pthread_mutex_t mutex;
-
-#define MAXDEVS	64
-dsbmc_dev_t *devs[MAXDEVS];
+static int	   uconnect(dsbmc_t *, const char *);
+static int	   send_string(dsbmc_t *, const char *);
+static int	   push_event(dsbmc_t *, const char *);
+static int	   parse_event(dsbmc_t *, const char *);
+static int	   process_event(dsbmc_t *, char *);
+static int	   dsbmc_send(dsbmc_t *, const char *, ...);
+static int	   dsbmc_send_async(dsbmc_t *, dsbmc_dev_t *,
+			void (*cb)(int, const dsbmc_dev_t *), const char *, ...);
+static void	   dsbmc_clearerr(dsbmc_t *);
+static void	   set_error(dsbmc_t *, int, bool, const char *, ...);
+static void	   del_device(dsbmc_t *, const char *);
+static void	   shuffle(dsbmc_t *);
+static void	   cleanup(dsbmc_t *);
+static char	   *readln(dsbmc_t *);
+static char	   *read_event(dsbmc_t *, bool);
+static char	   *pull_event(dsbmc_t *);
+static dsbmc_dev_t *add_device(dsbmc_t *, const dsbmc_dev_t *);
+static dsbmc_dev_t *lookup_device(dsbmc_t *, const char *);
+static dsbmc_dev_t *device_from_id(dsbmc_t *, int);
 
 int
-dsbmc_mount(const dsbmc_dev_t *d)
+dsbmc_mount(dsbmc_t *dh, const dsbmc_dev_t *d)
 {
 	int	     ret;
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	if ((ret = dsbmc_send("mount %s\n", dev->dev)) == 0) {
-		if (dsbmdevent.devinfo.mntpt == NULL) {
-			ERROR(-1, DSBMC_ERR_UNKNOWN_ERROR, false,
+	LOOKUP_DEV(dh, d, dev);
+	if ((ret = dsbmc_send(dh, "mount %s\n", dev->dev)) == 0) {
+		if (dh->event.devinfo.mntpt == NULL) {
+			ERROR(dh, -1, DSBMC_ERR_UNKNOWN_ERROR, false,
 			    "mntpt == NULL");
 		}
 		dev->mounted = true; free(dev->mntpt);
-		dev->mntpt = strdup(dsbmdevent.devinfo.mntpt);
+		dev->mntpt = strdup(dh->event.devinfo.mntpt);
 		if (dev->mntpt == NULL)
-			ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
 	}
 	return (ret);
 }
 
 int
-dsbmc_unmount(const dsbmc_dev_t *d, bool force)
+dsbmc_unmount(dsbmc_t *dh, const dsbmc_dev_t *d, bool force)
 {
 	int ret;
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	if ((ret = dsbmc_send(force ? "unmount -f %s\n" : "unmount %s\n",
+	LOOKUP_DEV(dh, d, dev);
+	if ((ret = dsbmc_send(dh, force ? "unmount -f %s\n" : "unmount %s\n",
 	    d->dev)) == 0) {
 		dev->mounted = false;
 	}
@@ -258,148 +197,152 @@ dsbmc_unmount(const dsbmc_dev_t *d, bool force)
 }
 
 int
-dsbmc_eject(const dsbmc_dev_t *d, bool force)
+dsbmc_eject(dsbmc_t *dh, const dsbmc_dev_t *d, bool force)
 {
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send(force ? "eject -f %s\n" : "eject %s\n", d->dev));
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send(dh, force ? "eject -f %s\n" : "eject %s\n", d->dev));
 }
 
 int
-dsbmc_size(const dsbmc_dev_t *d)
+dsbmc_size(dsbmc_t *dh, const dsbmc_dev_t *d)
 {
 	int ret;
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	if ((ret = dsbmc_send("size %s\n", d->dev)) == 0) {
-		dev->mediasize = dsbmdevent.mediasize;
-		dev->used = dsbmdevent.used;
-		dev->free = dsbmdevent.free;
+	LOOKUP_DEV(dh, d, dev);
+	if ((ret = dsbmc_send(dh, "size %s\n", d->dev)) == 0) {
+		dev->mediasize = dh->event.mediasize;
+		dev->used = dh->event.used;
+		dev->free = dh->event.free;
 	}
 	return (ret);
 }
 
 int
-dsbmc_set_speed(const dsbmc_dev_t *d, int speed)
+dsbmc_set_speed(dsbmc_t *dh, const dsbmc_dev_t *d, int speed)
 {
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send("speed %s %d\n", dev->dev, speed));
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send(dh, "speed %s %d\n", dev->dev, speed));
 }
 
 int
-dsbmc_mdattach(const char *image)
+dsbmc_mdattach(dsbmc_t *dh, const char *image)
 {
-	return (dsbmc_send("mdattach \"%s\"\n", image));
+	return (dsbmc_send(dh, "mdattach \"%s\"\n", image));
 }
 
 int
-dsbmc_mount_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
-{
-	dsbmc_dev_t *dev;
-
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, "mount %s\n", dev->dev));
-}
-
-int
-dsbmc_unmount_async(const dsbmc_dev_t *d, bool force,
+dsbmc_mount_async(dsbmc_t *dh, const dsbmc_dev_t *d,
 	void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, force ? "unmount -f %s\n" : \
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send_async(dh, dev, cb, "mount %s\n", dev->dev));
+}
+
+int
+dsbmc_unmount_async(dsbmc_t *dh, const dsbmc_dev_t *d, bool force,
+	void (*cb)(int, const dsbmc_dev_t *))
+{
+	dsbmc_dev_t *dev;
+
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send_async(dh, dev, cb, force ? "unmount -f %s\n" : \
 	    "unmount %s\n", dev->dev));
 }
 
 int
-dsbmc_eject_async(const dsbmc_dev_t *d, bool force,
+dsbmc_eject_async(dsbmc_t *dh, const dsbmc_dev_t *d, bool force,
 	void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, force ? "eject -f %s\n" : \
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send_async(dh, dev, cb, force ? "eject -f %s\n" : \
 	    "eject %s\n", dev->dev));
 }
 
 int
-dsbmc_set_speed_async(const dsbmc_dev_t *d, int speed,
-    void (*cb)(int, const dsbmc_dev_t *))
+dsbmc_set_speed_async(dsbmc_t *dh, const dsbmc_dev_t *d, int speed,
+	void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, "speed %s %d\n", dev->dev, speed));
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send_async(dh, dev, cb, "speed %s %d\n", dev->dev, speed));
 }
 
 int
-dsbmc_size_async(const dsbmc_dev_t *d, void (*cb)(int, const dsbmc_dev_t *))
+dsbmc_size_async(dsbmc_t *dh, const dsbmc_dev_t *d,
+	void (*cb)(int, const dsbmc_dev_t *))
 {
 	dsbmc_dev_t *dev;
 
-	LOOKUP_DEV(d, dev);
-	return (dsbmc_send_async(dev, cb, "size %s\n", dev->dev));
+	LOOKUP_DEV(dh, d, dev);
+	return (dsbmc_send_async(dh, dev, cb, "size %s\n", dev->dev));
 }
 
 int
-dsbmc_mdattach_async(const char *image, void (*cb)(int, const dsbmc_dev_t *))
+dsbmc_mdattach_async(dsbmc_t *dh, const char *image,
+	void (*cb)(int, const dsbmc_dev_t *))
 {
-	return (dsbmc_send_async(NULL, cb, "mdattach \"%s\"\n", image));
+	return (dsbmc_send_async(dh, NULL, cb, "mdattach \"%s\"\n", image));
 }
 
 void
-dsbmc_disconnect()
+dsbmc_disconnect(dsbmc_t *dh)
 {
-	(void)dsbmc_send("quit\n");
-	cleanup();
+	(void)dsbmc_send(dh, "quit\n");
+	(void)close(dh->socket);
 }
 
 void
-dsbmc_free_dev(const dsbmc_dev_t *dev)
+dsbmc_free_dev(dsbmc_t *dh, const dsbmc_dev_t *dev)
 {
 	if (dev == NULL || !dev->removed)
 		return;
-	del_device(dev->dev);
+	del_device(dh, dev->dev);
 }
 
 static void
-cleanup()
+cleanup(dsbmc_t *dh)
 {
-	while (ndevs > 0) 
-		del_device(devs[0]->dev);
-	while (pull_event() != NULL)
-		;
-	(void)close(dsbmd);
-	(void)pthread_mutex_destroy(&mutex);
-	free(lnbuf);
-	lnbuf = NULL; rd = slen = bufsz = 0;
+	int i;
+
+	while (dh->ndevs > 0) 
+		del_device(dh, dh->devs[0]->dev);
+	for (i = 0; i < dh->evq.n; i++)
+		free(dh->evq.ln);
+	free(dh->lnbuf);
+	free(dh->pbuf);
+	free(dh);
 }
 
 int
-dsbmc_get_err(const char **errmsg)
+dsbmc_get_err(dsbmc_t *dh, const char **errmsg)
 {
-	if (!_error)
+	if (!dh->error)
 		return (0);
 	if (errmsg != NULL)
-		*errmsg = errormsg;
-	return (_error);
+		*errmsg = dh->errormsg;
+	return (dh->error);
 }
 
 int
-dsbmc_get_fd()
+dsbmc_get_fd(dsbmc_t *dh)
 {
-	return (dsbmd);
+	return (dh->socket);
 }
 
 const char *
-dsbmc_errstr()
+dsbmc_errstr(dsbmc_t *dh)
 {
-	return (errormsg);
+	return (dh->errormsg);
 }
 
 const char *
@@ -417,89 +360,94 @@ dsbmc_errcode_to_str(int code)
 }
 
 int
-dsbmc_fetch_event(dsbmc_event_t *ev)
+dsbmc_fetch_event(dsbmc_t *dh, dsbmc_event_t *ev)
 {
 	int  error;
 	char *e;
 
-	(void)pthread_mutex_lock(&mutex);
-	dsbmc_clearerr();
-	while ((e = read_event(false)) != NULL) {
-		if (push_event(e) == -1) {
-			(void)pthread_mutex_unlock(&mutex);
-			ERROR(-1, 0, true, "push_event()");
-		}
+	dsbmc_clearerr(dh);
+	while ((e = read_event(dh, false)) != NULL) {
+		if (push_event(dh, e) == -1)
+			ERROR(dh, -1, 0, true, "push_event()");
 	}
-	if (dsbmc_get_err(NULL) != 0) {
-		(void)pthread_mutex_unlock(&mutex);
-		ERROR(-1, 0, true, "read_event()");
-	}
-	if ((e = pull_event()) == NULL) {
-		(void)pthread_mutex_unlock(&mutex);
+	if (dsbmc_get_err(dh, NULL) != 0)
+		ERROR(dh, -1, 0, true, "read_event()");
+	if ((e = pull_event(dh)) == NULL)
 		return (0);
+	if ((error = process_event(dh, e)) == 1) {
+		ev->type = dh->event.type;
+		ev->code = dh->event.code;
+		if (dh->event.devinfo.dev != NULL)
+			ev->dev = lookup_device(dh, dh->event.devinfo.dev);
 	}
-	if ((error = process_event(e)) == 1) {
-		ev->type = dsbmdevent.type;
-		ev->code = dsbmdevent.code;
-		if (dsbmdevent.devinfo.dev != NULL)
-			ev->dev = lookup_device(dsbmdevent.devinfo.dev);
-	}
-	(void)pthread_mutex_unlock(&mutex);
 	return (error);
 }
 
+dsbmc_t *
+dsbmc_alloc_handle()
+{
+	dsbmc_t *dh;
+
+	if ((dh = malloc(sizeof(dsbmc_t))) == NULL)
+		return (NULL);
+	bzero(dh, sizeof(dsbmc_t));
+
+	return (dh);
+}
+
+void
+dsbmc_free_handle(dsbmc_t *dh)
+{
+	cleanup(dh);
+}
+
 int
-dsbmc_connect()
+dsbmc_connect(dsbmc_t *dh)
 {
 	char *e;
 
-	cmdqsz = ndevs = 0;
-	event_queue.n = event_queue.i = 0;
-
-	(void)pthread_mutex_init(&mutex, NULL);
-
-	if ((dsbmd = uconnect(PATH_DSBMD_SOCKET)) == -1) {
-		ERROR(-1, ERR_SYS_FATAL, true, "uconnect(%s)",
+	if ((dh->socket = uconnect(dh, PATH_DSBMD_SOCKET)) == -1) {
+		ERROR(dh, -1, ERR_SYS_FATAL, true, "uconnect(%s)",
 		    PATH_DSBMD_SOCKET);
 	}
 	/* Get device list */
-	while ((e = read_event(true)) != NULL) {
-		if (process_event(e) == -1)
-			ERROR(-1, 0, true, "parse_event()");
-		if (dsbmdevent.type == DSBMC_EVENT_ERROR_MSG &&
-		    dsbmdevent.code == DSBMC_ERR_PERMISSION_DENIED) {
-			ERROR(-1, DSBMC_ERR_FATAL | DSBMC_ERR_CONN_DENIED,
+	while ((e = read_event(dh, true)) != NULL) {
+		if (process_event(dh, e) == -1)
+			ERROR(dh, -1, 0, true, "parse_event()");
+		if (dh->event.type == DSBMC_EVENT_ERROR_MSG &&
+		    dh->event.code == DSBMC_ERR_PERMISSION_DENIED) {
+			ERROR(dh, -1, DSBMC_ERR_FATAL | DSBMC_ERR_CONN_DENIED,
 			    false, "Permission denied");
 		}
-		if (dsbmdevent.type != DSBMC_EVENT_ADD_DEVICE &&
-		    dsbmdevent.type != DSBMC_EVENT_END_OF_LIST) {
-			ERROR(-1, ERR_SYS_FATAL, false,
-			    "Unexpected event (%d) received", dsbmdevent.type);
-		} else if (dsbmdevent.type == DSBMC_EVENT_END_OF_LIST)
+		if (dh->event.type != DSBMC_EVENT_ADD_DEVICE &&
+		    dh->event.type != DSBMC_EVENT_END_OF_LIST) {
+			ERROR(dh, -1, ERR_SYS_FATAL, false,
+			    "Unexpected event (%d) received", dh->event.type);
+		} else if (dh->event.type == DSBMC_EVENT_END_OF_LIST)
 			break;
 	}
 	return (0);
 }
 
 int
-dsbmc_get_devlist(const dsbmc_dev_t ***list)
+dsbmc_get_devlist(dsbmc_t *dh, const dsbmc_dev_t ***list)
 {
-	*list = (const dsbmc_dev_t **)devs;
+	*list = (const dsbmc_dev_t **)dh->devs;
 
-	return (ndevs);
+	return (dh->ndevs);
 }
 
 static void
-dsbmc_clearerr()
+dsbmc_clearerr(dsbmc_t *dh)
 {
-	_error = 0;
+	dh->error = 0;
 }
 
 static void
-set_error(int error, bool prepend, const char *fmt, ...)
+set_error(dsbmc_t *dh, int error, bool prepend, const char *fmt, ...)
 {
 	int	_errno;
-	char	errbuf[sizeof(errormsg)];
+	char	errbuf[sizeof(dh->errormsg)];
 	size_t  len;
 	va_list ap;
 
@@ -507,16 +455,17 @@ set_error(int error, bool prepend, const char *fmt, ...)
 
 	va_start(ap, fmt);
 	if (prepend) {
-		_error |= error;
+		dh->error |= error;
 		if (error & DSBMC_ERR_FATAL) {
-			if (strncmp(errormsg, "Fatal error: ", 13) == 0) {
-				memmove(errormsg, errormsg + 13,
-				    strlen(errormsg) - 12);
+			if (strncmp(dh->errormsg, "Fatal error: ", 13) == 0) {
+				memmove(dh->errormsg, dh->errormsg + 13,
+				    strlen(dh->errormsg) - 12);
 			}
 			(void)strlcpy(errbuf, "Fatal error: ", sizeof(errbuf));
 			len = strlen(errbuf);
-		} else if (strncmp(errormsg, "Error: ", 7) == 0) {
-			memmove(errormsg, errormsg + 7, strlen(errormsg) - 6);
+		} else if (strncmp(dh->errormsg, "Error: ", 7) == 0) {
+			memmove(dh->errormsg, dh->errormsg + 7,
+			    strlen(dh->errormsg) - 6);
 			(void)strlcpy(errbuf, "Error: ", sizeof(errbuf));
 			len = strlen(errbuf);
  		} else
@@ -525,67 +474,67 @@ set_error(int error, bool prepend, const char *fmt, ...)
 
 		len = strlen(errbuf);
 		(void)snprintf(errbuf + len, sizeof(errbuf) - len, ": %s",
-		    errormsg);
-		(void)strcpy(errormsg, errbuf);
+		    dh->errormsg);
+		(void)strcpy(dh->errormsg, errbuf);
 	} else {
-		_error = error;
-		(void)vsnprintf(errormsg, sizeof(errormsg), fmt, ap);
+		dh->error = error;
+		(void)vsnprintf(dh->errormsg, sizeof(dh->errormsg), fmt, ap);
 		if (error == DSBMC_ERR_FATAL) {
 			(void)snprintf(errbuf, sizeof(errbuf),
-			    "Fatal error: %s", errormsg);
+			    "Fatal error: %s", dh->errormsg);
 		} else {
 			(void)snprintf(errbuf, sizeof(errbuf),
-			    "Error: %s", errormsg);
+			    "Error: %s", dh->errormsg);
 		}	
-		(void)strcpy(errormsg, errbuf);
+		(void)strcpy(dh->errormsg, errbuf);
 	}
 	if ((error & DSBMC_ERR_SYS) && _errno != 0) {
-		len = strlen(errormsg);
-		(void)snprintf(errormsg + len, sizeof(errormsg) - len, ": %s",
-		    strerror(_errno));
+		len = strlen(dh->errormsg);
+		(void)snprintf(dh->errormsg + len, sizeof(dh->errormsg) - len,
+		    ": %s", strerror(_errno));
 		errno = 0;
 	}
 }
 
 static int
-uconnect(const char *path)
+uconnect(dsbmc_t *dh, const char *path)
 {
 	int  s;
 	struct sockaddr_un saddr;
 
 	if ((s = socket(PF_LOCAL, SOCK_STREAM, 0)) == -1)
-		ERROR(-1, ERR_SYS_FATAL, false, "socket()");
+		ERROR(dh, -1, ERR_SYS_FATAL, false, "socket()");
 	(void)memset(&saddr, (unsigned char)0, sizeof(saddr));
 	(void)snprintf(saddr.sun_path, sizeof(saddr.sun_path), "%s", path);
 	saddr.sun_family = AF_LOCAL;
 	if (connect(s, (struct sockaddr *)&saddr, sizeof(saddr)) == -1)
-		ERROR(-1, ERR_SYS_FATAL, false, "connect(%s)", path);
+		ERROR(dh, -1, ERR_SYS_FATAL, false, "connect(%s)", path);
 	if (fcntl(s, F_SETFL, fcntl(s, F_GETFL) | O_NONBLOCK) == -1)
-		ERROR(-1, ERR_SYS_FATAL, false, "setvbuf()/fcntl()");
+		ERROR(dh, -1, ERR_SYS_FATAL, false, "setvbuf()/fcntl()");
 	return (s);
 }
 
 static dsbmc_dev_t *
-add_device(const dsbmc_dev_t *d)
+add_device(dsbmc_t *dh, const dsbmc_dev_t *d)
 {
 	static int   id = 1;
 	dsbmc_dev_t *dp;
 
-	if ((dp = lookup_device(d->dev)) != NULL && !dp->removed)
+	if ((dp = lookup_device(dh, d->dev)) != NULL && !dp->removed)
 		return (NULL);
-	if ((devs[ndevs] = malloc(sizeof(dsbmc_dev_t))) == NULL)
-		ERROR(NULL, ERR_SYS_FATAL, false, "malloc()");
-	dp = devs[ndevs];
+	if ((dh->devs[dh->ndevs] = malloc(sizeof(dsbmc_dev_t))) == NULL)
+		ERROR(dh, NULL, ERR_SYS_FATAL, false, "malloc()");
+	dp = dh->devs[dh->ndevs];
 	if ((dp->dev = strdup(d->dev)) == NULL)
-		ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
+		ERROR(dh, NULL, ERR_SYS_FATAL, false, "strdup()");
 	if (d->volid != NULL) {
 		if ((dp->volid = strdup(d->volid)) == NULL)
-			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
+			ERROR(dh, NULL, ERR_SYS_FATAL, false, "strdup()");
 	} else
 		dp->volid = NULL;
 	if (d->mntpt != NULL) {
 		if ((dp->mntpt = strdup(d->mntpt)) == NULL)
-			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
+			ERROR(dh, NULL, ERR_SYS_FATAL, false, "strdup()");
 		dp->mounted = true;
 	} else {
 		dp->mntpt   = NULL;
@@ -593,7 +542,7 @@ add_device(const dsbmc_dev_t *d)
 	}
 	if (d->fsname != NULL) {
 		if ((dp->fsname = strdup(d->fsname)) == NULL)
-			ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
+			ERROR(dh, NULL, ERR_SYS_FATAL, false, "strdup()");
 	} else
 		dp->fsname = NULL;
 	dp->id	    = id++;
@@ -621,237 +570,281 @@ add_device(const dsbmc_dev_t *d)
 	if (dp->volid == NULL)
 		dp->volid = strdup(d->dev);
 	if (dp->volid == NULL)
-		ERROR(NULL, ERR_SYS_FATAL, false, "strdup()");
+		ERROR(dh, NULL, ERR_SYS_FATAL, false, "strdup()");
 	if ((d->cmds & DSBMC_CMD_MOUNT)) {
 		/* Device we can open in a filemanager. */
 		dp->cmds |= DSBMC_CMD_OPEN;
 	}
-	return (devs[ndevs++]);
+	return (dh->devs[dh->ndevs++]);
 }
 
 static void
-del_device(const char *dev)
+del_device(dsbmc_t *dh, const char *dev)
 {
 	int i;
 
-	for (i = 0; i < ndevs; i++) {
-		if (strcmp(devs[i]->dev, dev) == 0)
+	for (i = 0; i < dh->ndevs; i++) {
+		if (strcmp(dh->devs[i]->dev, dev) == 0)
 			break;
 	}
-	if (i == ndevs)
+	if (i == dh->ndevs)
 		return;
-	free(devs[i]->dev);
-	free(devs[i]->volid);
-	free(devs[i]->mntpt);
-	free(devs[i]);
-	for (; i < ndevs - 1; i++)
-		devs[i] = devs[i + 1];
-	ndevs--;
+	free(dh->devs[i]->dev);
+	free(dh->devs[i]->volid);
+	free(dh->devs[i]->mntpt);
+	free(dh->devs[i]);
+	for (; i < dh->ndevs - 1; i++)
+		dh->devs[i] = dh->devs[i + 1];
+	dh->ndevs--;
 }
 
 static void
-shuffle()
+shuffle(dsbmc_t *dh)
 {
 	int i, n;
 
-	if (!devs[ndevs - 1]->removed)
+	if (!dh->devs[dh->ndevs - 1]->removed)
 		return;
-	for (n = ndevs - 2; n >= 0 && devs[n]->removed; n--)
+	for (n = dh->ndevs - 2; n >= 0 && dh->devs[n]->removed; n--)
 		;
 	if (n++ < 0)
 		return;
-	if (ndevs + 1 > MAXDEVS)
+	if (dh->ndevs + 1 > DSBMC_MAXDEVS)
 		return;
-	for (i = ndevs - 1; i >= n; i--)
-		devs[i + 1] = devs[i];
-	devs[n] = devs[ndevs];	
+	for (i = dh->ndevs - 1; i >= n; i--)
+		dh->devs[i + 1] = dh->devs[i];
+	dh->devs[n] = dh->devs[dh->ndevs];	
 }
 
 static void
-set_removed(const char *dev)
+set_removed(dsbmc_t *dh, const char *dev)
 {
 	dsbmc_dev_t *dp;
 
-	if ((dp = lookup_device(dev)) == NULL)
+	if ((dp = lookup_device(dh, dev)) == NULL)
 		return;
 	dp->removed = true;
 }
 
 static dsbmc_dev_t *
-lookup_device(const char *dev)
+lookup_device(dsbmc_t *dh, const char *dev)
 {
 	int i;
 	
 	if (dev == NULL)
 		return (NULL);
-	for (i = 0; i < ndevs; i++) {
-		if (strcmp(devs[i]->dev, dev) == 0 && !devs[i]->removed)
-			return (devs[i]);
+	for (i = 0; i < dh->ndevs; i++) {
+		if (strcmp(dh->devs[i]->dev, dev) == 0 && !dh->devs[i]->removed)
+			return (dh->devs[i]);
 	
 	}
-	for (i = 0; i < ndevs; i++) {
-		if (strcmp(devs[i]->dev, dev) == 0)
-			return (devs[i]);
+	for (i = 0; i < dh->ndevs; i++) {
+		if (strcmp(dh->devs[i]->dev, dev) == 0)
+			return (dh->devs[i]);
 	
 	}
 	return (NULL);
 }
 
 static dsbmc_dev_t *
-device_from_id(int id)
+device_from_id(dsbmc_t *dh, int id)
 {
 	int i;
 
-	for (i = 0; i < ndevs; i++) {
-		if (devs[i]->id == id)
-			return (devs[i]);
+	for (i = 0; i < dh->ndevs; i++) {
+		if (dh->devs[i]->id == id)
+			return (dh->devs[i]);
 	}
 	return (NULL);
 }
 
 char *
-readln()
+readln(dsbmc_t *dh)
 {
 	int  i, n;
 
-	if (lnbuf == NULL) {
-		if ((lnbuf = malloc(_POSIX2_LINE_MAX)) == NULL)
+	if (dh->lnbuf == NULL) {
+		if ((dh->lnbuf = malloc(_POSIX2_LINE_MAX)) == NULL)
 			return (NULL);
-		bufsz = _POSIX2_LINE_MAX;
+		dh->bufsz = _POSIX2_LINE_MAX;
 	}
 	n = 0;
 	do {
-		rd += n;
-		if (slen > 0)
-			(void)memmove(lnbuf, lnbuf + slen, rd - slen);
-		rd  -= slen;
-		slen = 0;
-		for (i = 0; i < rd && lnbuf[i] != '\n'; i++)
+		dh->rd += n;
+		if (dh->slen > 0) {
+			(void)memmove(dh->lnbuf, dh->lnbuf + dh->slen,
+			    dh->rd - dh->slen);
+		}
+		dh->rd  -= dh->slen;
+		dh->slen = 0;
+		for (i = 0; i < dh->rd && dh->lnbuf[i] != '\n'; i++)
 			;
-		if (i < rd) {
-			lnbuf[i] = '\0';
-			slen = i + 1;
-			if (slen >= bufsz)
-				slen = rd = 0;
-			return (lnbuf);
+		if (i < dh->rd) {
+			dh->lnbuf[i] = '\0';
+			dh->slen = i + 1;
+			if (dh->slen >= dh->bufsz)
+				dh->slen = dh->rd = 0;
+			return (dh->lnbuf);
 		}
-		if (rd >= bufsz) {
-			lnbuf = realloc(lnbuf, bufsz + _POSIX2_LINE_MAX);
-			if (lnbuf == NULL)
-				ERROR(NULL, ERR_SYS_FATAL, false, "realloc()");
-			bufsz += _POSIX2_LINE_MAX;
+		if (dh->rd >= dh->bufsz) {
+			dh->lnbuf = realloc(dh->lnbuf, dh->bufsz +
+			    _POSIX2_LINE_MAX);
+			if (dh->lnbuf == NULL) {
+				ERROR(dh, NULL, ERR_SYS_FATAL, false,
+				    "realloc()");
+			}
+			dh->bufsz += _POSIX2_LINE_MAX;
 		}
-	} while ((n = read(dsbmd, lnbuf + rd, bufsz - rd)) > 0);
+	} while ((n = read(dh->socket, dh->lnbuf + dh->rd,
+	    dh->bufsz - dh->rd)) > 0);
 
 	if (n == 0) {
-		rd = slen = 0;
-		ERROR(NULL, DSBMC_ERR_LOST_CONNECTION, false,
+		dh->rd = dh->slen = 0;
+		ERROR(dh, NULL, DSBMC_ERR_LOST_CONNECTION, false,
 		    "Lost connection to DSBMD");
 	} else if (n == -1) {
-		rd = slen = 0;
+		dh->rd = dh->slen = 0;
 		if (errno != EINTR && errno != EAGAIN)
-			ERROR(NULL, ERR_SYS_FATAL, false, "read()");
+			ERROR(dh, NULL, ERR_SYS_FATAL, false, "read()");
 	}
 	return (NULL);
 }
 
 static char *
-read_event(bool block)
+read_event(dsbmc_t *dh, bool block)
 {
 	char   *ln;
 	fd_set rset;
 
-	if ((ln = readln()) == NULL) {
-		if ((_error & DSBMC_ERR_LOST_CONNECTION) || !block)
+	if ((ln = readln(dh)) == NULL) {
+		if ((dh->error & DSBMC_ERR_LOST_CONNECTION) || !block)
 			return (NULL);
 	} else
 		return (ln);
-	FD_ZERO(&rset); FD_SET(dsbmd, &rset);
+	FD_ZERO(&rset); FD_SET(dh->socket, &rset);
 	/* Block until data is available. */
-	while (select(dsbmd + 1, &rset, NULL, NULL, NULL) == -1) {
+	while (select(dh->socket + 1, &rset, NULL, NULL, NULL) == -1) {
 		if (errno != EINTR)
 			return (NULL);
 		else
-			ERROR(NULL, ERR_SYS_FATAL, false, "select()");
+			ERROR(dh, NULL, ERR_SYS_FATAL, false, "select()");
 	}
-	return (readln());
+	return (readln(dh));
 }
 
 static int
-push_event(const char *e)
+push_event(dsbmc_t *dh, const char *e)
 {
-	if (event_queue.n >= MAXEQSZ)
-		ERROR(-1, ERR_SYS_FATAL, false, "MAXEQSZ exceeded.");
-	if ((event_queue.ln[event_queue.n] = strdup(e)) == NULL)
-		ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
-	event_queue.n++;
+	if (dh->evq.n >= DSBMC_MAXEQSZ)
+		ERROR(dh, -1, ERR_SYS_FATAL, false, "DSBMC_MAXEQSZ exceeded.");
+	if ((dh->evq.ln[dh->evq.n] = strdup(e)) == NULL)
+		ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
+	dh->evq.n++;
 
 	return (0);
 }
 
 static char *
-pull_event()
+pull_event(dsbmc_t *dh)
 {
 	int i;
 
-	if (event_queue.i >= event_queue.n) {
+	if (dh->evq.i >= dh->evq.n) {
 		/* Reset queue */
-		for (i = 0; i < event_queue.n; i++) {
-			free(event_queue.ln[i]);
-			event_queue.ln[i] = NULL;
+		for (i = 0; i < dh->evq.n; i++) {
+			free(dh->evq.ln[i]);
+			dh->evq.ln[i] = NULL;
 		}
-		event_queue.n = event_queue.i = 0;
+		dh->evq.n = dh->evq.i = 0;
 		return (NULL);
 	}
-	return (event_queue.ln[event_queue.i++]);
+	return (dh->evq.ln[dh->evq.i++]);
 }
 
 static int
-parse_event(const char *str)
+parse_event(dsbmc_t *dh, const char *str)
 {
-	int	    i, len;
-	char	    *p, *q, *tmp, *k, *c;
-	static char buf[_POSIX2_LINE_MAX];
+	int	      i;
+	char	      *p, *q, *tmp, *k, *c;
+	size_t	      len;
+	dsbmd_event_t event;
+	struct dsbmdkeyword_s kwords[] = {
+	  { "+",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	       },
+	  { "-",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "E",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "O",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "M",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "U",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "V",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "S",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "=",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
+	  { "command=",	  KWTYPE_STRING,  (val_t)&event.command	       },
+	  { "dev=",	  KWTYPE_STRING,  (val_t)&event.devinfo.dev    },
+	  { "fs=",	  KWTYPE_STRING,  (val_t)&event.devinfo.fsname },
+	  { "volid=",	  KWTYPE_STRING,  (val_t)&event.devinfo.volid  },
+	  { "mntpt=",	  KWTYPE_STRING,  (val_t)&event.devinfo.mntpt  },
+	  { "type=",	  KWTYPE_DSKTYPE, (val_t)&event.devinfo.type   },
+	  { "speed=",	  KWTYPE_UINT8,	  (val_t)&event.devinfo.speed  },
+	  { "code=",	  KWTYPE_INTEGER, (val_t)&event.code	       },
+	  { "cmds=",	  KWTYPE_COMMANDS,(val_t)(char *)0	       },
+	  { "mntcmderr=", KWTYPE_INTEGER, (val_t)&event.mntcmderr      },
+	  { "mediasize=", KWTYPE_UINT64,  (val_t)&event.mediasize      },
+	  { "used=",	  KWTYPE_UINT64,  (val_t)&event.used	       },
+	  { "free=",	  KWTYPE_UINT64,  (val_t)&event.free	       }
+	};
+	const size_t nkwords = sizeof(kwords) / sizeof(kwords[0]);
 
 	/* Init */
-	(void)strlcpy(buf, str, sizeof(buf));
-	for (i = 0; i < NKEYWORDS; i++) {
-		if (dsbmdkeywords[i].val.string != NULL)
-			*dsbmdkeywords[i].val.string = NULL;
+	len = strlen(str) + 1;
+	if (dh->pbufsz < len) {
+		dh->pbuf = realloc(dh->pbuf, len);
+		if (dh->pbuf == NULL)
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "realloc()");
+		dh->pbufsz = len;
 	}
-	for (p = buf; (k = strsep(&p, ":\n")) != NULL;) {
-		for (i = 0; i < NKEYWORDS; i++) {
-			len = strlen(dsbmdkeywords[i].key);
-			if (strncmp(dsbmdkeywords[i].key, k, len) == 0)
+	(void)strlcpy(dh->pbuf, str, len);
+
+	for (i = 0; i < nkwords; i++) {
+		if (kwords[i].val.string != NULL)
+			*kwords[i].val.string = NULL;
+	}
+	for (p = dh->pbuf; (k = strsep(&p, ":\n")) != NULL;) {
+		for (i = 0; i < nkwords; i++) {
+			len = strlen(kwords[i].key);
+			if (strncmp(kwords[i].key, k, len) == 0)
 				break;
 		}
-		if (i == NKEYWORDS) {
+		if (i == nkwords) {
 			warnx("Unknown keyword '%s'", k);
 			continue;
 		}
-		switch (dsbmdkeywords[i].type) {
+		switch (kwords[i].type) {
 		case KWTYPE_STRING:
-			*dsbmdkeywords[i].val.string = k + len;
+			*kwords[i].val.string = k + len;
 			break;
 		case KWTYPE_CHAR:
-			*dsbmdkeywords[i].val.character = *k;
+			*kwords[i].val.character = *k;
+			break;
+		case KWTYPE_UINT8:
+			*kwords[i].val.uint8 =
+			    (uint8_t)strtol(k + len, NULL, 10);
 			break;
 		case KWTYPE_INTEGER:
-			*dsbmdkeywords[i].val.integer =
+			*kwords[i].val.integer =
 			    strtol(k + len, NULL, 10);
 			break;
 		case KWTYPE_UINT64:
-			*dsbmdkeywords[i].val.uint64 =
+			*kwords[i].val.uint64 =
 			    (uint64_t)strtoll(k + len, NULL, 10);
 			break;
 		case KWTYPE_COMMANDS:
-			dsbmdevent.devinfo.cmds = 0;
+			event.devinfo.cmds = 0;
 			if ((q = tmp = c = strdup(k + len)) == NULL)
-				ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
+				ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
 			while ((c = strsep(&q, ",")) != NULL) {
 				for (i = 0; i < NCMDS; i++) {
 					if (strcmp(cmdtbl[i].name, c) == 0) {
-						dsbmdevent.devinfo.cmds |=
+						event.devinfo.cmds |=
 						    cmdtbl[i].cmd;
 					}
 				}
@@ -861,7 +854,7 @@ parse_event(const char *str)
 		case KWTYPE_DSKTYPE:
 			for (i = 0; i < NDSKTYPES; i++) {
 				if (strcmp(disktypetbl[i].name, k + len) == 0) {
-					dsbmdevent.devinfo.type =
+					event.devinfo.type =
 					    disktypetbl[i].type;
 					break;
                         	}
@@ -869,6 +862,8 @@ parse_event(const char *str)
 			break;
 		}
 	}
+	dh->event = event;
+
 	return (0);
 }
 
@@ -878,68 +873,69 @@ parse_event(const char *str)
  * status.
  */
 static int
-process_event(char *buf)
+process_event(dsbmc_t *dh, char *buf)
 {
 	int	     i;
 	dsbmc_dev_t *d;
 
-	if (parse_event(buf) != 0)
-		ERROR(-1, 0, true, "parse_event()");
-	if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG) {
-		if (cmdqsz <= 0)
+	if (parse_event(dh, buf) != 0)
+		ERROR(dh, -1, 0, true, "parse_event()");
+	if (dh->event.type == DSBMC_EVENT_SUCCESS_MSG) {
+		if (dh->cmdqsz <= 0)
 			return (0);
-		d = dsbmc_sender[0].dev;
+		d = dh->sender[0].dev;
 	} else {
-		switch (dsbmdevent.type) {
+		switch (dh->event.type) {
 		case DSBMC_EVENT_MOUNT:
 		case DSBMC_EVENT_UNMOUNT:
 		case DSBMC_EVENT_SPEED:
-			d = lookup_device(dsbmdevent.devinfo.dev);
+			d = lookup_device(dh, dh->event.devinfo.dev);
 			if (d == NULL) {
-				warnx("Unknown device %s", dsbmdevent.devinfo.dev);
+				warnx("Unknown device %s",
+				    dh->event.devinfo.dev);
 				return (-1);
 			}
 		}
 	}
-	switch (dsbmdevent.type) {
+	switch (dh->event.type) {
 	case DSBMC_EVENT_SUCCESS_MSG:
-		if (cmdqsz <= 0)
+		if (dh->cmdqsz <= 0)
 			return (0);
-		if (dsbmc_sender[0].id == DSBMC_CMD_MOUNT) {
+		if (dh->sender[0].id == DSBMC_CMD_MOUNT) {
 			d->mounted = true; free(d->mntpt);
-			d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
+			d->mntpt = strdup(dh->event.devinfo.mntpt);
 			if (d->mntpt == NULL)
-				ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
-		} else if (dsbmc_sender[0].id == DSBMC_CMD_UNMOUNT) {
+				ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
+		} else if (dh->sender[0].id == DSBMC_CMD_UNMOUNT) {
 			d->mounted = false;
-		} else if (dsbmc_sender[0].id == DSBMC_CMD_SIZE) {
-			d->mediasize = dsbmdevent.mediasize;
-			d->used = dsbmdevent.used;
-			d->free = dsbmdevent.free;
+		} else if (dh->sender[0].id == DSBMC_CMD_SIZE) {
+			d->mediasize = dh->event.mediasize;
+			d->used = dh->event.used;
+			d->free = dh->event.free;
 		}
 	case DSBMC_EVENT_ERROR_MSG:
-		if (cmdqsz <= 0)
+		if (dh->cmdqsz <= 0)
 			return (0);
-		dsbmc_sender[0].callback(dsbmdevent.code, dsbmc_sender[0].dev);
-		free(dsbmc_sender[0].cmd);
-		for (i = 0; i < cmdqsz - 1; i++) {
-			dsbmc_sender[i].dev = dsbmc_sender[i + 1].dev;
-			dsbmc_sender[i].callback = dsbmc_sender[i + 1].callback;
-			dsbmc_sender[i].cmd = dsbmc_sender[i + 1].cmd;
-			dsbmc_sender[i].id = dsbmc_sender[i + 1].id;
+		dh->sender[0].callback(dh->event.code, dh->sender[0].dev);
+		free(dh->sender[0].cmd);
+		for (i = 0; i < dh->cmdqsz - 1; i++) {
+			dh->sender[i].dev = dh->sender[i + 1].dev;
+			dh->sender[i].callback = dh->sender[i + 1].callback;
+			dh->sender[i].cmd = dh->sender[i + 1].cmd;
+			dh->sender[i].id = dh->sender[i + 1].id;
 		}
-		if (--cmdqsz == 0)
+		if (--(dh->cmdqsz) == 0)
 			return (0);
-		if (send_string(dsbmc_sender[i].cmd) == -1)
-			ERROR(-1, 0, true, "send_string()");
+		if (send_string(dh, dh->sender[i].cmd) == -1)
+			ERROR(dh, -1, 0, true, "send_string()");
 		return (0);
 	case DSBMC_EVENT_ADD_DEVICE:
-		if ((d = add_device(&dsbmdevent.devinfo)) == NULL)
-			ERROR(-1, 0, true, "add_device()");
+		if ((d = add_device(dh, &dh->event.devinfo)) == NULL)
+			ERROR(dh, -1, 0, true, "add_device()");
 		return (1);
 	case DSBMC_EVENT_DEL_DEVICE:
-		set_removed(dsbmdevent.devinfo.dev);
-		shuffle();
+		set_removed(dh, dh->event.devinfo.dev);
+		shuffle(dh);
 		return (1);
 	case DSBMC_EVENT_END_OF_LIST:
 		return (0);
@@ -947,15 +943,15 @@ process_event(char *buf)
 		return (1);
 	case DSBMC_EVENT_MOUNT:
 		d->mounted = true; free(d->mntpt);
-		d->mntpt = strdup(dsbmdevent.devinfo.mntpt);
+		d->mntpt = strdup(dh->event.devinfo.mntpt);
 		if (d->mntpt == NULL)
-			ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
 		return (1);
 	case DSBMC_EVENT_UNMOUNT:
 		d->mounted = false;
 		return (1);
 	case DSBMC_EVENT_SPEED:
-		d->speed = dsbmdevent.devinfo.speed;
+		d->speed = dh->event.devinfo.speed;
 		return (1);
 	default:
 		warnx("Invalid event received.");
@@ -965,103 +961,83 @@ process_event(char *buf)
 }
 
 static int
-dsbmc_send_async(dsbmc_dev_t *dev, void (*cb)(int, const dsbmc_dev_t *),
-    const char *cmd, ...)
+dsbmc_send_async(dsbmc_t *dh, dsbmc_dev_t *dev,
+	void (*cb)(int, const dsbmc_dev_t *), const char *cmd, ...)
 {
 	int	i;
 	char	buf[_POSIX2_LINE_MAX];
 	size_t	len;
 	va_list ap;
 	
-	(void)pthread_mutex_lock(&mutex);
-	dsbmc_clearerr();
+	dsbmc_clearerr(dh);
 
-	if (cmdqsz >= CMDQMAXSZ) {
-		(void)pthread_mutex_unlock(&mutex);
-		ERROR(-1, DSBMC_ERR_CMDQ_BUSY, false, "Command queue busy");
-	}
+	if (dh->cmdqsz >= DSBMC_CMDQMAXSZ)
+		ERROR(dh, -1, DSBMC_ERR_CMDQ_BUSY, false, "Command queue busy");
 	va_start(ap, cmd);
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
 
-	dsbmc_sender[cmdqsz].dev = dev;
-	dsbmc_sender[cmdqsz].callback = cb;
+	dh->sender[dh->cmdqsz].dev = dev;
+	dh->sender[dh->cmdqsz].callback = cb;
 
 	for (i = 0; i < NCMDS; i++) {
 		len = strlen(cmdtbl[i].name);
 		if (strncmp(cmdtbl[i].name, cmd, len) == 0) {
-			dsbmc_sender[cmdqsz].id = cmdtbl[i].cmd;
+			dh->sender[dh->cmdqsz].id = cmdtbl[i].cmd;
 			break;
 		}
 	}
-	if ((dsbmc_sender[cmdqsz].cmd = strdup(buf)) == NULL) {
-		(void)pthread_mutex_unlock(&mutex);
-		ERROR(-1, ERR_SYS_FATAL, false, "strdup()");
-	}
-	if (cmdqsz++ > 0) {
-		(void)pthread_mutex_lock(&mutex);
+	if ((dh->sender[dh->cmdqsz].cmd = strdup(buf)) == NULL)
+		ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
+	if ((dh->cmdqsz)++ > 0)
 		return (0);
-	}
-	if (send_string(buf) == -1) {
-		(void)pthread_mutex_unlock(&mutex);
-		ERROR(-1, 0, true, "send_string()");
-	}
-	(void)pthread_mutex_unlock(&mutex);
+	if (send_string(dh, buf) == -1)
+		ERROR(dh, -1, 0, true, "send_string()");
 	return (0);
 }
 
 static int
-dsbmc_send(const char *cmd, ...)
+dsbmc_send(dsbmc_t *dh, const char *cmd, ...)
 {
 	char	buf[_POSIX2_LINE_MAX], *e;
 	va_list	ap;
 
-	(void)pthread_mutex_lock(&mutex);
-	dsbmc_clearerr();
+	dsbmc_clearerr(dh);
 
-	if (cmdqsz > 0) {
-		ERROR(-1, DSBMC_ERR_COMMAND_IN_PROGRESS, false,
+	if (dh->cmdqsz > 0) {
+		ERROR(dh, -1, DSBMC_ERR_COMMAND_IN_PROGRESS, false,
 		    "dsbmc_send(): Command already in progress");
 	}
 	va_start(ap, cmd);
 	
 	(void)vsnprintf(buf, sizeof(buf) - 1, cmd, ap);
-	if (send_string(buf) == -1) {
-		(void)pthread_mutex_unlock(&mutex);
-		ERROR(-1, 0, true, "send_string()");
-	}
-	while ((e = read_event(true)) != NULL) {
-		if (parse_event(e) == -1) {
-			(void)pthread_mutex_unlock(&mutex);
-			ERROR(-1, 0, true, "parse_event()");
-		}
-		if (dsbmdevent.type == DSBMC_EVENT_SUCCESS_MSG) {
-			(void)pthread_mutex_unlock(&mutex);
+	if (send_string(dh, buf) == -1)
+		ERROR(dh, -1, 0, true, "send_string()");
+	while ((e = read_event(dh, true)) != NULL) {
+		if (parse_event(dh, e) == -1)
+			ERROR(dh, -1, 0, true, "parse_event()");
+		if (dh->event.type == DSBMC_EVENT_SUCCESS_MSG)
 			return (0);
-		} else if (dsbmdevent.type == DSBMC_EVENT_ERROR_MSG) {
-			(void)pthread_mutex_unlock(&mutex);
-			return (dsbmdevent.code);
-		} else if (push_event(e) == -1) {
-			(void)pthread_mutex_unlock(&mutex);
-			ERROR(-1, 0, true, "push_event()");
-		}
+		else if (dh->event.type == DSBMC_EVENT_ERROR_MSG)
+			return (dh->event.code);
+		else if (push_event(dh, e) == -1)
+			ERROR(dh, -1, 0, true, "push_event()");
 	}
-	(void)pthread_mutex_unlock(&mutex);
-	ERROR(-1, 0, true, "read_event()");
+	ERROR(dh, -1, 0, true, "read_event()");
 }
 
 static int
-send_string(const char *str)
+send_string(dsbmc_t *dh, const char *str)
 {
 	fd_set wrset;
 
-	FD_ZERO(&wrset); FD_SET(dsbmd, &wrset);
-	while (select(dsbmd + 1, 0, &wrset, 0, 0) == -1) {
+	FD_ZERO(&wrset); FD_SET(dh->socket, &wrset);
+	while (select(dh->socket + 1, 0, &wrset, 0, 0) == -1) {
 		if (errno != EINTR)
-			ERROR(-1, ERR_SYS_FATAL, false, "select()");
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "select()");
 	}
-	while (write(dsbmd, str, strlen(str)) == -1) {
+	while (write(dh->socket, str, strlen(str)) == -1) {
 		if (errno != EINTR)
-			ERROR(-1, ERR_SYS_FATAL, false, "write()");
+			ERROR(dh, -1, ERR_SYS_FATAL, false, "write()");
 	}		
 	return (0);
 }

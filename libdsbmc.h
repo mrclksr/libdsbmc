@@ -114,33 +114,81 @@ typedef struct dsbmc_event_s {
 	dsbmc_dev_t *dev;		/* Pointer into dev list */
 } dsbmc_event_t;
 
-extern int  dsbmc_fetch_event(dsbmc_event_t *ev);
-extern int  dsbmc_get_devlist(const dsbmc_dev_t ***);
-extern int  dsbmc_mount(const dsbmc_dev_t *d);
-extern int  dsbmc_unmount(const dsbmc_dev_t *d, bool force);
-extern int  dsbmc_eject(const dsbmc_dev_t *d, bool force);
-extern int  dsbmc_set_speed(const dsbmc_dev_t *d, int speed);
-extern int  dsbmc_size(const dsbmc_dev_t *d);
-extern int  dsbmc_mdattach(const char *);
-extern int  dsbmc_set_speed_async(const dsbmc_dev_t *d, int speed,
+typedef struct dsbmc_sender_s {
+	int	     id;	/* DSBMC_CMD_.. */
+	int	     retcode;	/* Reply code from DSBMD */
+	char	    *cmd;	/* Command string */
+	dsbmc_dev_t *dev;
+	void (*callback)(int retcode, const dsbmc_dev_t *dev);
+} dsbmc_sender_t;
+
+typedef struct dsbmc_eventq_s {
+	int  n;			/* # of events in queue */
+	int  i;			/* Current index */
+#define DSBMC_MAXEQSZ 64
+	char *ln[DSBMC_MAXEQSZ];
+} dsbmc_eventq_t;
+
+typedef struct dsbmd_event_s {
+	char	    type;	/* Event type. */
+	char	    *command;	/* In case of a reply, the executed command. */
+	int	    mntcmderr;	/* Return code of external mount command. */
+	int	    code;	/* The error code */
+	uint64_t    mediasize;	/* For "size" command. */
+	uint64_t    free;	/* 	 ""	       */
+	uint64_t    used;	/* 	 ""	       */
+	dsbmc_dev_t devinfo;	/* For Add/delete/mount/unmount message. */
+} dsbmd_event_t;
+
+typedef struct dsbmc_s {
+	int	       socket;
+	int	       error;
+	char	       *lnbuf;
+	char	       *pbuf;
+	char	       errormsg[_POSIX2_LINE_MAX];
+	size_t	       rd;
+	size_t	       bufsz;
+	size_t	       pbufsz;
+	size_t	       slen;
+	size_t	       ndevs;
+	size_t	       cmdqsz;
+#define DSBMC_MAXDEVS  64
+	dsbmc_dev_t    *devs[DSBMC_MAXDEVS];
+	dsbmd_event_t  event;
+	dsbmc_eventq_t evq;
+#define DSBMC_CMDQMAXSZ 32
+	dsbmc_sender_t sender[DSBMC_CMDQMAXSZ];
+} dsbmc_t;
+
+extern int  dsbmc_fetch_event(dsbmc_t *, dsbmc_event_t *ev);
+extern int  dsbmc_get_devlist(dsbmc_t *, const dsbmc_dev_t ***);
+extern int  dsbmc_mount(dsbmc_t *, const dsbmc_dev_t *d);
+extern int  dsbmc_unmount(dsbmc_t *, const dsbmc_dev_t *d, bool force);
+extern int  dsbmc_eject(dsbmc_t *, const dsbmc_dev_t *d, bool force);
+extern int  dsbmc_set_speed(dsbmc_t *, const dsbmc_dev_t *d, int speed);
+extern int  dsbmc_size(dsbmc_t *, const dsbmc_dev_t *d);
+extern int  dsbmc_mdattach(dsbmc_t *, const char *);
+extern int  dsbmc_set_speed_async(dsbmc_t *, const dsbmc_dev_t *d, int speed,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_mount_async(const dsbmc_dev_t *d,
+extern int  dsbmc_mount_async(dsbmc_t *, const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_unmount_async(const dsbmc_dev_t *d, bool force,
+extern int  dsbmc_unmount_async(dsbmc_t *, const dsbmc_dev_t *d, bool force,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_eject_async(const dsbmc_dev_t *d, bool force,
+extern int  dsbmc_eject_async(dsbmc_t *, const dsbmc_dev_t *d, bool force,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_size_async(const dsbmc_dev_t *d,
+extern int  dsbmc_size_async(dsbmc_t *, const dsbmc_dev_t *d,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_mdattach_async(const char *,
+extern int  dsbmc_mdattach_async(dsbmc_t *, const char *,
 		void (*cb)(int, const dsbmc_dev_t *));
-extern int  dsbmc_connect(void);
-extern int  dsbmc_get_fd(void);
-extern int  dsbmc_get_err(const char **);
-extern void dsbmc_disconnect(void);
-extern void dsbmc_free_dev(const dsbmc_dev_t *);
-extern const char *dsbmc_errstr(void);
+extern int  dsbmc_connect(dsbmc_t *);
+extern int  dsbmc_get_fd(dsbmc_t *);
+extern int  dsbmc_get_err(dsbmc_t *, const char **);
+extern void dsbmc_free_handle(dsbmc_t *);
+extern void dsbmc_disconnect(dsbmc_t *);
+extern void dsbmc_free_dev(dsbmc_t *, const dsbmc_dev_t *);
+extern const char *dsbmc_errstr(dsbmc_t *);
 extern const char *dsbmc_errcode_to_str(int);
+extern dsbmc_t	  *dsbmc_alloc_handle(void);
 
 #ifdef __cplusplus
 }
