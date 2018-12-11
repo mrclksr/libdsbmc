@@ -769,7 +769,7 @@ parse_event(dsbmc_t *dh, const char *str)
 	size_t	      len;
 	dsbmd_event_t event;
 	struct dsbmdkeyword_s kwords[] = {
-	  { "+",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	       },
+	  { "+",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
 	  { "-",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
 	  { "E",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
 	  { "O",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
