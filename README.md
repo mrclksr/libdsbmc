@@ -8,72 +8,83 @@
 **#include &lt;libdsbmc.h>**
 
 *int*  
-**dsbmc\_fetch\_event**(*dsbmc\_event\_t \*ev*);
+**dsbmc\_fetch\_event**(*dsbmc\_t \*handle*, *dsbmc\_event\_t \*ev*);
 
 *int*  
-**dsbmc\_get\_devlist**(*const dsbmc\_dev\_t \*\*\*&zwnj;*);
+**dsbmc\_get\_devlist**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*\*\*list*);
 
 *int*  
-**dsbmc\_mount**(*const dsbmc\_dev\_t \*d*);
+**dsbmc\_mount**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*);
 
 *int*  
-**dsbmc\_unmount**(*const dsbmc\_dev\_t \*d*, *bool force*);
+**dsbmc\_unmount**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *bool force*);
 
 *int*  
-**dsbmc\_eject**(*const dsbmc\_dev\_t \*d*, *bool force*);
+**dsbmc\_eject**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *bool force*);
 
 *int*  
-**dsbmc\_set\_speed**(*const dsbmc\_dev\_t \*d*, *int speed*);
+**dsbmc\_set\_speed**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *int speed*);
 
 *int*  
-**dsbmc\_size**(*const dsbmc\_dev\_t \*d*);
+**dsbmc\_size**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*);
 
 *int*  
-**dsbmc\_mdattach**(*const char \*image*);
+**dsbmc\_mdattach**(*dsbmc\_t \*handle*, *const char \*image*);
 
 *int*  
-**dsbmc\_set\_speed\_async**(*const dsbmc\_dev\_t \*d*, *int speed*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+**dsbmc\_set\_speed\_async**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *int speed*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
-**dsbmc\_mount\_async**(*const dsbmc\_dev\_t \*d*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+**dsbmc\_mount\_async**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
-**dsbmc\_unmount\_async**(*const dsbmc\_dev\_t \*d*, *bool force*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+**dsbmc\_unmount\_async**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *bool force*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
-**dsbmc\_eject\_async**(*const dsbmc\_dev\_t \*d*, *bool force*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+**dsbmc\_eject\_async**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *bool force*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
-**dsbmc\_size\_async**(*const dsbmc\_dev\_t \*d*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+**dsbmc\_size\_async**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*d*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
-**dsbmc\_mdattach\_async**(*const char \*image*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
+**dsbmc\_mdattach\_async**(*dsbmc\_t \*handle*, *const char \*image*, *void (\*cb)(int, const dsbmc\_dev\_t \*)*);
 
 *int*  
-**dsbmc\_connect**(*void*);
+**dsbmc\_connect**(*dsbmc\_t \*handle*);
 
 *int*  
-**dsbmc\_get\_fd**(*void*);
+**dsbmc\_get\_fd**(*dsbmc\_t \*handle*);
 
 *int*  
-**dsbmc\_get\_err**(*const char \*\*&zwnj;*);
+**dsbmc\_get\_err**(*dsbmc\_t \*handle*, *const char \*\*buf*);
 
 *void*  
-**dsbmc\_disconnect**(*void*);
+**dsbmc\_disconnect**(*dsbmc\_t \*handle*);
 
 *void*  
-**dsbmc\_free\_dev**(*const dsbmc\_dev\_t \*&zwnj;*);
+**dsbmc\_free\_handle**(*dsbmc\_t \*handle*);
+
+*void*  
+**dsbmc\_free\_dev**(*dsbmc\_t \*handle*, *const dsbmc\_dev\_t \*dev*);
 
 *const char \*&zwnj;*  
-**dsbmc\_errstr**(*void*);
+**dsbmc\_errstr**(*dsbmc\_t \*handle*);
 
 *const char \*&zwnj;*  
 **dsbmc\_errcode\_to\_str**(*int code*);
 
+*dsbmc\_t \*&zwnj;*  
+**dsbmc\_alloc\_handle**(*void*);
+
 # DESCRIPTION
 
+Almost all functions operate on a handle of type
+*dsbmc\_t*.
+**dsbmc\_alloc\_handle**()
+creates and initializes a handle, and returns a pointer to it. If an error
+occured, NULL is returned.
+
 **dsbmc\_connect**()
-must be called before any other dsbmc function. It
 establishes a connection to DSBMD, and returns 0 on success, and -1 if
 an error occured. If this function fails, DSBMC\_ERR\_CONN\_DENIED is set in the
 error bitmask, or errno is set to any value defined in connect(2) and
@@ -82,6 +93,9 @@ socket(2).
 The
 **dsbmc\_disconnect**()
 function terminates the connection to DSBMD.
+
+**dsbmc\_free\_handle**()
+frees the memory used by the handle.
 
 The
 **dsbmc\_fetch\_event**()
@@ -220,12 +234,8 @@ function translates a DSBMD error-code into a string.
 # THREADS
 
 **libdsbmc**
-can be used together with threads. However, using multiple connections to
-DSBMD established by
-**dsbmc\_connect**()
-is not supported. Special care must be taken when using
-**dsbmc\_free\_dev**()
-on multiple threads.
+can be used together with threads. However, access to a single handle from
+multiple threads must be synchronized, e.g. by using a mutex.
 
 # OBJECTS
 
