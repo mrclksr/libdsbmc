@@ -318,6 +318,8 @@ cleanup(dsbmc_t *dh)
 		del_device(dh, dh->devs[0]->dev);
 	for (i = 0; i < dh->evq.n; i++)
 		free(dh->evq.ln);
+	while (--(dh->cmdqsz) > 0)
+		free(dh->sender[dh->cmdqsz].cmd);
 	free(dh->lbuf);
 	free(dh->pbuf);
 	free(dh->sbuf);
