@@ -764,33 +764,32 @@ pull_event(dsbmc_t *dh)
 static int
 parse_event(dsbmc_t *dh, const char *str)
 {
-	int	      i;
-	char	      *p, *q, *tmp, *k, *c;
-	size_t	      len;
-	dsbmd_event_t event;
+	int    i;
+	char   *p, *q, *tmp, *k, *c;
+	size_t len;
 	struct dsbmdkeyword_s kwords[] = {
-	  { "+",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "-",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "E",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "O",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "M",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "U",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "V",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "S",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "=",	  KWTYPE_CHAR,	  (val_t)&event.type	       },
-	  { "command=",	  KWTYPE_STRING,  (val_t)&event.command	       },
-	  { "dev=",	  KWTYPE_STRING,  (val_t)&event.devinfo.dev    },
-	  { "fs=",	  KWTYPE_STRING,  (val_t)&event.devinfo.fsname },
-	  { "volid=",	  KWTYPE_STRING,  (val_t)&event.devinfo.volid  },
-	  { "mntpt=",	  KWTYPE_STRING,  (val_t)&event.devinfo.mntpt  },
-	  { "type=",	  KWTYPE_DSKTYPE, (val_t)&event.devinfo.type   },
-	  { "speed=",	  KWTYPE_UINT8,	  (val_t)&event.devinfo.speed  },
-	  { "code=",	  KWTYPE_INTEGER, (val_t)&event.code	       },
-	  { "cmds=",	  KWTYPE_COMMANDS,(val_t)(char *)0	       },
-	  { "mntcmderr=", KWTYPE_INTEGER, (val_t)&event.mntcmderr      },
-	  { "mediasize=", KWTYPE_UINT64,  (val_t)&event.mediasize      },
-	  { "used=",	  KWTYPE_UINT64,  (val_t)&event.used	       },
-	  { "free=",	  KWTYPE_UINT64,  (val_t)&event.free	       }
+	  { "+",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "-",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "E",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "O",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "M",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "U",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "V",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "S",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "=",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
+	  { "command=",	  KWTYPE_STRING,  (val_t)&dh->event.command	   },
+	  { "dev=",	  KWTYPE_STRING,  (val_t)&dh->event.devinfo.dev    },
+	  { "fs=",	  KWTYPE_STRING,  (val_t)&dh->event.devinfo.fsname },
+	  { "volid=",	  KWTYPE_STRING,  (val_t)&dh->event.devinfo.volid  },
+	  { "mntpt=",	  KWTYPE_STRING,  (val_t)&dh->event.devinfo.mntpt  },
+	  { "type=",	  KWTYPE_DSKTYPE, (val_t)&dh->event.devinfo.type   },
+	  { "speed=",	  KWTYPE_UINT8,	  (val_t)&dh->event.devinfo.speed  },
+	  { "code=",	  KWTYPE_INTEGER, (val_t)&dh->event.code	   },
+	  { "cmds=",	  KWTYPE_COMMANDS,(val_t)(char *)0	           },
+	  { "mntcmderr=", KWTYPE_INTEGER, (val_t)&dh->event.mntcmderr      },
+	  { "mediasize=", KWTYPE_UINT64,  (val_t)&dh->event.mediasize      },
+	  { "used=",	  KWTYPE_UINT64,  (val_t)&dh->event.used	   },
+	  { "free=",	  KWTYPE_UINT64,  (val_t)&dh->event.free	   }
 	};
 	const size_t nkwords = sizeof(kwords) / sizeof(kwords[0]);
 
@@ -838,13 +837,13 @@ parse_event(dsbmc_t *dh, const char *str)
 			    (uint64_t)strtoll(k + len, NULL, 10);
 			break;
 		case KWTYPE_COMMANDS:
-			event.devinfo.cmds = 0;
+			dh->event.devinfo.cmds = 0;
 			if ((q = tmp = c = strdup(k + len)) == NULL)
 				ERROR(dh, -1, ERR_SYS_FATAL, false, "strdup()");
 			while ((c = strsep(&q, ",")) != NULL) {
 				for (i = 0; i < NCMDS; i++) {
 					if (strcmp(cmdtbl[i].name, c) == 0) {
-						event.devinfo.cmds |=
+						dh->event.devinfo.cmds |=
 						    cmdtbl[i].cmd;
 					}
 				}
@@ -854,7 +853,7 @@ parse_event(dsbmc_t *dh, const char *str)
 		case KWTYPE_DSKTYPE:
 			for (i = 0; i < NDSKTYPES; i++) {
 				if (strcmp(disktypetbl[i].name, k + len) == 0) {
-					event.devinfo.type =
+					dh->event.devinfo.type =
 					    disktypetbl[i].type;
 					break;
                         	}
@@ -862,8 +861,6 @@ parse_event(dsbmc_t *dh, const char *str)
 			break;
 		}
 	}
-	dh->event = event;
-
 	return (0);
 }
 
