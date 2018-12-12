@@ -521,10 +521,14 @@ static dsbmc_dev_t *
 add_device(dsbmc_t *dh, const dsbmc_dev_t *d)
 {
 	static int   id = 1;
-	dsbmc_dev_t *dp;
+	dsbmc_dev_t *dp, **dl;
 
 	if ((dp = lookup_device(dh, d->dev)) != NULL && !dp->removed)
 		return (NULL);
+	dl = realloc(dh->devs, sizeof(dsbmc_dev_t *) * (dh->ndevs + 1));
+	if (dl == NULL)
+		ERROR(dh, NULL, ERR_SYS_FATAL, false, "realloc()");
+	dh->devs = dl;
 	if ((dh->devs[dh->ndevs] = malloc(sizeof(dsbmc_dev_t))) == NULL)
 		ERROR(dh, NULL, ERR_SYS_FATAL, false, "malloc()");
 	dp = dh->devs[dh->ndevs];
@@ -586,11 +590,13 @@ del_device(dsbmc_t *dh, const char *dev)
 {
 	int i;
 
-	for (i = 0; i < dh->ndevs; i++) {
+	for (i = dh->ndevs - 1; i >= 0; i--) {
+		if (!dh->devs[i]->removed)
+			continue;
 		if (strcmp(dh->devs[i]->dev, dev) == 0)
 			break;
 	}
-	if (i == dh->ndevs)
+	if (i < 0)
 		return;
 	free(dh->devs[i]->dev);
 	free(dh->devs[i]->volid);
@@ -599,24 +605,6 @@ del_device(dsbmc_t *dh, const char *dev)
 	for (; i < dh->ndevs - 1; i++)
 		dh->devs[i] = dh->devs[i + 1];
 	dh->ndevs--;
-}
-
-static void
-shuffle(dsbmc_t *dh)
-{
-	int i, n;
-
-	if (!dh->devs[dh->ndevs - 1]->removed)
-		return;
-	for (n = dh->ndevs - 2; n >= 0 && dh->devs[n]->removed; n--)
-		;
-	if (n++ < 0)
-		return;
-	if (dh->ndevs + 1 > DSBMC_MAXDEVS)
-		return;
-	for (i = dh->ndevs - 1; i >= n; i--)
-		dh->devs[i + 1] = dh->devs[i];
-	dh->devs[n] = dh->devs[dh->ndevs];	
 }
 
 static void
@@ -636,12 +624,13 @@ lookup_device(dsbmc_t *dh, const char *dev)
 	
 	if (dev == NULL)
 		return (NULL);
-	for (i = 0; i < dh->ndevs; i++) {
-		if (strcmp(dh->devs[i]->dev, dev) == 0 && !dh->devs[i]->removed)
+	for (i = dh->ndevs - 1; i >= 0; i--) {
+		if (dh->devs[i]->removed)
+			continue;
+		if (strcmp(dh->devs[i]->dev, dev) == 0)
 			return (dh->devs[i]);
-	
 	}
-	for (i = 0; i < dh->ndevs; i++) {
+	for (i = dh->ndevs - 1; i >= 0; i--) {
 		if (strcmp(dh->devs[i]->dev, dev) == 0)
 			return (dh->devs[i]);
 	
@@ -935,7 +924,6 @@ process_event(dsbmc_t *dh, char *buf)
 		return (1);
 	case DSBMC_EVENT_DEL_DEVICE:
 		set_removed(dh, dh->event.devinfo.dev);
-		shuffle(dh);
 		return (1);
 	case DSBMC_EVENT_END_OF_LIST:
 		return (0);
