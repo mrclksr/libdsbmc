@@ -153,7 +153,6 @@ static int	   dsbmc_send_async(dsbmc_t *, dsbmc_dev_t *,
 static void	   dsbmc_clearerr(dsbmc_t *);
 static void	   set_error(dsbmc_t *, int, bool, const char *, ...);
 static void	   del_device(dsbmc_t *, const char *);
-static void	   shuffle(dsbmc_t *);
 static void	   cleanup(dsbmc_t *);
 static char	   *readln(dsbmc_t *);
 static char	   *read_event(dsbmc_t *, bool);
