@@ -154,8 +154,7 @@ typedef struct dsbmc_s {
 	size_t	       slen;
 	size_t	       ndevs;
 	size_t	       cmdqsz;
-#define DSBMC_MAXDEVS  64
-	dsbmc_dev_t    *devs[DSBMC_MAXDEVS];
+	dsbmc_dev_t    **devs;
 	dsbmd_event_t  event;
 	dsbmc_eventq_t evq;
 #define DSBMC_CMDQMAXSZ 32
