@@ -191,6 +191,7 @@ extern const char  *dsbmc_errstr(dsbmc_t *);
 extern const char  *dsbmc_errcode_to_str(int);
 extern dsbmc_t	   *dsbmc_alloc_handle(void);
 extern dsbmc_dev_t *dsbmc_dev_from_id(dsbmc_t *, int);
+extern dsbmc_dev_t *dsbmc_dev_from_name(dsbmc_t *, const char *);
 extern dsbmc_dev_t *dsbmc_next_dev(dsbmc_t *, int *, bool);
 #ifdef __cplusplus
 }

@@ -451,6 +451,12 @@ dsbmc_dev_from_id(dsbmc_t *dh, int id)
 }
 
 dsbmc_dev_t *
+dsbmc_dev_from_name(dsbmc_t *dh, const char *dev)
+{
+	return (lookup_device(dh, dev));
+}
+
+dsbmc_dev_t *
 dsbmc_next_dev(dsbmc_t *dh, int *idx, bool removed)
 {
 	int n;
@@ -644,7 +650,7 @@ set_removed(dsbmc_t *dh, const char *dev)
 	dp->removed = true;
 }
 
-static dsbmc_dev_t *
+dsbmc_dev_t *
 lookup_device(dsbmc_t *dh, const char *dev)
 {
 	int i;
