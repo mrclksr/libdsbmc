@@ -450,6 +450,23 @@ dsbmc_dev_from_id(dsbmc_t *dh, int id)
 	return (NULL);
 }
 
+dsbmc_dev_t *
+dsbmc_next_dev(dsbmc_t *dh, int *idx, bool removed)
+{
+	int n;
+
+	if (*idx < 0 || *idx >= dh->ndevs)
+		return (NULL);
+	for (n = dh->ndevs - 1; n - *idx >= 0; (*idx)++) {
+		if (dh->devs[n - *idx]->removed) {
+			if (removed)
+				return (dh->devs[n - (*idx)++]);
+		} else
+			return (dh->devs[n - (*idx)++]);
+	}
+	return (NULL);
+}
+
 static void
 dsbmc_clearerr(dsbmc_t *dh)
 {
