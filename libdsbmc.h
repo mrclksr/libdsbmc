@@ -187,9 +187,10 @@ extern int  dsbmc_get_err(dsbmc_t *, const char **);
 extern void dsbmc_free_handle(dsbmc_t *);
 extern void dsbmc_disconnect(dsbmc_t *);
 extern void dsbmc_free_dev(dsbmc_t *, const dsbmc_dev_t *);
-extern const char *dsbmc_errstr(dsbmc_t *);
-extern const char *dsbmc_errcode_to_str(int);
-extern dsbmc_t	  *dsbmc_alloc_handle(void);
+extern const char  *dsbmc_errstr(dsbmc_t *);
+extern const char  *dsbmc_errcode_to_str(int);
+extern dsbmc_t	   *dsbmc_alloc_handle(void);
+extern dsbmc_dev_t *dsbmc_dev_from_id(dsbmc_t *, int);
 
 #ifdef __cplusplus
 }

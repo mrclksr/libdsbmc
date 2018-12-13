@@ -56,7 +56,7 @@
 
 #define LOOKUP_DEV(dh, arg, dev) do {				\
 	VALIDATE(dh, arg);					\
-	dev = device_from_id(dh, arg->id);			\
+	dev = dsbmc_dev_from_id(dh, arg->id);			\
 	VALIDATE(dh, dev);					\
 } while (0)
 
@@ -159,7 +159,6 @@ static char	   *read_event(dsbmc_t *, bool);
 static char	   *pull_event(dsbmc_t *);
 static dsbmc_dev_t *add_device(dsbmc_t *, const dsbmc_dev_t *);
 static dsbmc_dev_t *lookup_device(dsbmc_t *, const char *);
-static dsbmc_dev_t *device_from_id(dsbmc_t *, int);
 
 int
 dsbmc_mount(dsbmc_t *dh, const dsbmc_dev_t *d)
@@ -439,6 +438,18 @@ dsbmc_get_devlist(dsbmc_t *dh, const dsbmc_dev_t ***list)
 	return (dh->ndevs);
 }
 
+dsbmc_dev_t *
+dsbmc_dev_from_id(dsbmc_t *dh, int id)
+{
+	int i;
+
+	for (i = dh->ndevs - 1; i >= 0; i--) {
+		if (dh->devs[i]->id == id)
+			return (dh->devs[i]);
+	}
+	return (NULL);
+}
+
 static void
 dsbmc_clearerr(dsbmc_t *dh)
 {
@@ -633,18 +644,6 @@ lookup_device(dsbmc_t *dh, const char *dev)
 		if (strcmp(dh->devs[i]->dev, dev) == 0)
 			return (dh->devs[i]);
 	
-	}
-	return (NULL);
-}
-
-static dsbmc_dev_t *
-device_from_id(dsbmc_t *dh, int id)
-{
-	int i;
-
-	for (i = 0; i < dh->ndevs; i++) {
-		if (dh->devs[i]->id == id)
-			return (dh->devs[i]);
 	}
 	return (NULL);
 }
