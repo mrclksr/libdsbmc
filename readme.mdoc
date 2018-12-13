@@ -51,6 +51,12 @@
 .Fn dsbmc_errcode_to_str "int code"
 .Ft dsbmc_t *
 .Fn dsbmc_alloc_handle "void"
+.Ft dsbmc_dev_t *
+.Fn dsbmc_dev_from_name "dsbmc_t *handle" "const char *name"
+.Ft dsbmc_dev_t *
+.Fn dsbmc_dev_from_id "dsbmc_t *handle" "int id"
+.Ft dsbmc_dev_t *
+.Fn dsbmc_next_dev "dsbmc_t *handle" "int *idx" "bool removed"
 .Sh DESCRIPTION
 Almost all functions operate on a handle of type
 .Vt "dsbmc_t".
@@ -204,6 +210,25 @@ returns the last error message.
 The
 .Fn dsbmc_errcode_to_str
 function translates a DSBMD error-code into a string.
+.Pp
+The
+.Fn dsbmc_dev_from_name
+function returns a pointer to the device object matching the given device name,
+or NULL if there was no match.
+.Pp
+The
+.Fn dsbmc_dev_from_id
+function returns a pointer to the device object matching the given ID,
+or NULL if there was no match.
+.Pp
+The
+.Fn dsbmc_next_dev
+function returns the next device from the device list, starting from
+.Ar *idx ,
+and increases the content of the given index pointer. If
+.Ar removed
+is false, removed devices are ignored. If the end of the list is reached, NULL
+is returned.
 .Sh THREADS
 .Nm libdsbmc
 can be used together with threads. However, access to a single handle from
