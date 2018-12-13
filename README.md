@@ -76,6 +76,15 @@
 *dsbmc\_t \*&zwnj;*  
 **dsbmc\_alloc\_handle**(*void*);
 
+*dsbmc\_dev\_t \*&zwnj;*  
+**dsbmc\_dev\_from\_name**(*dsbmc\_t \*handle*, *const char \*name*);
+
+*dsbmc\_dev\_t \*&zwnj;*  
+**dsbmc\_dev\_from\_id**(*dsbmc\_t \*handle*, *int id*);
+
+*dsbmc\_dev\_t \*&zwnj;*  
+**dsbmc\_next\_dev**(*dsbmc\_t \*handle*, *int \*idx*, *bool removed*);
+
 # DESCRIPTION
 
 Almost all functions operate on a handle of type
@@ -230,6 +239,25 @@ returns the last error message.
 The
 **dsbmc\_errcode\_to\_str**()
 function translates a DSBMD error-code into a string.
+
+The
+**dsbmc\_dev\_from\_name**()
+function returns a pointer to the device object matching the given device name,
+or NULL if there was no match.
+
+The
+**dsbmc\_dev\_from\_id**()
+function returns a pointer to the device object matching the given ID,
+or NULL if there was no match.
+
+The
+**dsbmc\_next\_dev**()
+function returns the next device from the device list, starting from
+*\*idx*,
+and increases the content of the given index pointer. If
+*removed*
+is false, removed devices are ignored. If the end of the list is reached, NULL
+is returned.
 
 # THREADS
 
