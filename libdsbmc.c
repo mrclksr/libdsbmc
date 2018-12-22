@@ -936,7 +936,7 @@ process_event(dsbmc_t *dh, char *buf)
 		}
 		if (--(dh->cmdqsz) == 0)
 			return (0);
-		if (send_string(dh, dh->sender[i].cmd) == -1)
+		if (send_string(dh, dh->sender[0].cmd) == -1)
 			ERROR(dh, -1, 0, true, "send_string()");
 		return (0);
 	case DSBMC_EVENT_ADD_DEVICE:
