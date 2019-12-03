@@ -123,8 +123,8 @@ typedef struct dsbmc_sender_s {
 } dsbmc_sender_t;
 
 typedef struct dsbmc_eventq_s {
-	int  n;			/* # of events in queue */
-	int  i;			/* Current index */
+	size_t n;		/* # of events in queue */
+	size_t i;		/* Current index */
 #define DSBMC_MAXEQSZ 64
 	char *ln[DSBMC_MAXEQSZ];
 } dsbmc_eventq_t;

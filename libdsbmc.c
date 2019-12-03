@@ -354,7 +354,7 @@ dsbmc_errstr(dsbmc_t *dh)
 const char *
 dsbmc_errcode_to_str(int code)
 {
-	int i;
+	size_t i;
 
 	if (code < (1 << 8))
 		return (strerror(code));
@@ -466,7 +466,7 @@ dsbmc_next_dev(dsbmc_t *dh, int *idx, bool removed)
 {
 	int n;
 
-	if (*idx < 0 || *idx >= dh->ndevs)
+	if (*idx < 0 || (size_t)*idx >= dh->ndevs)
 		return (NULL);
 	for (n = dh->ndevs - 1; n - *idx >= 0; (*idx)++) {
 		if (dh->devs[n - *idx]->removed) {
@@ -628,7 +628,7 @@ del_device(dsbmc_t *dh, const char *dev)
 {
 	int i;
 
-	for (i = dh->ndevs - 1; i >= 0; i--) {
+	for (i = (int)dh->ndevs - 1; i >= 0; i--) {
 		if (!dh->devs[i]->removed)
 			continue;
 		if (strcmp(dh->devs[i]->dev, dev) == 0)
@@ -640,7 +640,7 @@ del_device(dsbmc_t *dh, const char *dev)
 	free(dh->devs[i]->volid);
 	free(dh->devs[i]->mntpt);
 	free(dh->devs[i]);
-	for (; i < dh->ndevs - 1; i++)
+	for (; i < (int)dh->ndevs - 1; i++)
 		dh->devs[i] = dh->devs[i + 1];
 	dh->ndevs--;
 }
@@ -679,7 +679,8 @@ lookup_device(dsbmc_t *dh, const char *dev)
 char *
 readln(dsbmc_t *dh)
 {
-	int  i, n;
+	int    n;
+	size_t i;
 
 	if (dh->lbuf == NULL) {
 		if ((dh->lbuf = malloc(BUFSZ)) == NULL)
@@ -764,7 +765,7 @@ push_event(dsbmc_t *dh, const char *e)
 static char *
 pull_event(dsbmc_t *dh)
 {
-	int i;
+	size_t i;
 
 	if (dh->evq.i >= dh->evq.n) {
 		/* Reset queue */
@@ -781,9 +782,8 @@ pull_event(dsbmc_t *dh)
 static int
 parse_event(dsbmc_t *dh, const char *str)
 {
-	int    i;
 	char   *p, *q, *tmp, *k, *c;
-	size_t len;
+	size_t i, len;
 	struct dsbmdkeyword_s kwords[] = {
 	  { "+",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
 	  { "-",	  KWTYPE_CHAR,	  (val_t)&dh->event.type	   },
@@ -890,7 +890,7 @@ parse_event(dsbmc_t *dh, const char *str)
 static int
 process_event(dsbmc_t *dh, char *buf)
 {
-	int	     i;
+	size_t	     i;
 	dsbmc_dev_t *d;
 
 	if (parse_event(dh, buf) != 0)
@@ -980,9 +980,8 @@ static int
 dsbmc_send_async(dsbmc_t *dh, dsbmc_dev_t *dev,
 	void (*cb)(int, const dsbmc_dev_t *), const char *cmd, ...)
 {
-	int	i;
 	char	*p;
-	size_t	len;
+	size_t	i, len;
 	va_list ap;
 	
 	dsbmc_clearerr(dh);
@@ -995,7 +994,7 @@ dsbmc_send_async(dsbmc_t *dh, dsbmc_dev_t *dev,
 	}
 	for (;;) {
 		va_start(ap, cmd);
-		if (vsnprintf(dh->sbuf, dh->sbufsz, cmd, ap) < dh->sbufsz)
+		if ((size_t)vsnprintf(dh->sbuf, dh->sbufsz, cmd, ap) < dh->sbufsz)
 			break;
 		/* Send buffer too small. */
 		if ((p = realloc(dh->sbuf, BUFSZ + dh->sbufsz)) == NULL)
@@ -1041,7 +1040,7 @@ dsbmc_send(dsbmc_t *dh, const char *cmd, ...)
 	}
 	for (;;) {
 		va_start(ap, cmd);
-		if (vsnprintf(dh->sbuf, dh->sbufsz, cmd, ap) < dh->sbufsz)
+		if ((size_t)vsnprintf(dh->sbuf, dh->sbufsz, cmd, ap) < dh->sbufsz)
 			break;
 		/* Send buffer too small. */
 		if ((p = realloc(dh->sbuf, BUFSZ + dh->sbufsz)) == NULL)
