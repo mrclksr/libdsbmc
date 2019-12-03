@@ -313,13 +313,15 @@ dsbmc_free_dev(dsbmc_t *dh, const dsbmc_dev_t *dev)
 static void
 cleanup(dsbmc_t *dh)
 {
-	int i;
+	size_t i;
 
-	while (dh->ndevs > 0) 
-		del_device(dh, dh->devs[0]->dev);
+	for (i = 0; i < dh->ndevs; i++) {
+		dh->devs[i]->removed = true;
+		del_device(dh, dh->devs[i]->dev);
+	}
 	for (i = 0; i < dh->evq.n; i++)
-		free(dh->evq.ln);
-	while (--(dh->cmdqsz) > 0)
+		free(dh->evq.ln[i]);
+	while (dh->cmdqsz != 0 && --(dh->cmdqsz) > 0)
 		free(dh->sender[dh->cmdqsz].cmd);
 	free(dh->lbuf);
 	free(dh->pbuf);
